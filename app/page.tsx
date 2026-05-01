@@ -4,7 +4,9 @@ import { useEffect, useState, useMemo } from 'react';
 import { collection, getDocs, orderBy, query } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import EventCard from '@/components/EventCard';
-import { Loader2, MapPin, Music, FilterX, Calendar, Trophy, Flame } from 'lucide-react';
+import StarBorder from '@/components/StarBorder';
+import { Loader2, MapPin, Music, FilterX, Calendar, Flame } from 'lucide-react';
+import Link from 'next/link';
 
 interface EventData {
   id: string;
@@ -62,13 +64,8 @@ export default function Home() {
 
   // --- LÓGICA DEL RANKING "ALTA JODA" ---
   const topEventos = useMemo(() => {
-    // 1. Filtramos solo eventos que tengan al menos 1 "Me gusta"
     const eventosConLikes = events.filter(e => (e.likes || 0) > 0);
-    
-    // 2. Ordenamos de mayor a menor cantidad de likes
     const ordenados = eventosConLikes.sort((a, b) => (b.likes || 0) - (a.likes || 0));
-    
-    // 3. Devolvemos solo el Top 3 (o el Top 4 si querés llenar la fila entera)
     return ordenados.slice(0, 3);
   }, [events]);
 
@@ -156,30 +153,52 @@ export default function Home() {
             
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {topEventos.map((evento, index) => (
-                <div key={evento.id} className="relative">
-                  {/* Etiqueta de Top (Oro, Plata, Bronce) */}
-                  <div className={`absolute -top-4 -right-4 z-10 w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg shadow-lg border-2 border-night-900
-                    ${index === 0 ? 'bg-yellow-400 text-yellow-900' : 
+                <div key={evento.id} className="relative h-full">
+                  {/* Etiqueta de Top */}
+                  <div className={`absolute -top-4 -right-4 z-[50] w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg shadow-xl border-4 border-night-900
+                    ${index === 0 ? 'bg-yellow-400 text-yellow-900 shadow-yellow-500/50' : 
                       index === 1 ? 'bg-gray-300 text-gray-800' : 
                       'bg-amber-700 text-orange-100'}
                   `}>
                     #{index + 1}
                   </div>
                   
-                  {/* Tarjeta del evento con un borde especial si es el #1 */}
-                  <div className={`h-full rounded-2xl ${index === 0 ? 'ring-2 ring-yellow-400/50 shadow-glow shadow-yellow-500/20' : ''}`}>
-                    <EventCard 
-                      id={evento.id}
-                      title={evento.title}
-                      venue={evento.venue}
-                      imageUrl={evento.imageUrl}
-                      location={evento.location}
-                      date={evento.date}
-                      musicType={evento.musicType}
-                      likes={evento.likes}
-                      mediaType={evento.mediaType}
-                    />
-                  </div>
+                  {/* MAGIA: Si es el #1, lo envolvemos en el StarBorder */}
+                  {index === 0 ? (
+                    <StarBorder
+                      as="div"
+                      color="#f97316"
+                      speed="4s"
+                      thickness={3}
+                      className="h-full w-full"
+                    >
+                      <EventCard 
+                        id={evento.id}
+                        title={evento.title}
+                        venue={evento.venue}
+                        imageUrl={evento.imageUrl}
+                        location={evento.location}
+                        date={evento.date}
+                        musicType={evento.musicType}
+                        likes={evento.likes}
+                        mediaType={evento.mediaType}
+                      />
+                    </StarBorder>
+                  ) : (
+                    <div className="h-full rounded-2xl">
+                      <EventCard 
+                        id={evento.id}
+                        title={evento.title}
+                        venue={evento.venue}
+                        imageUrl={evento.imageUrl}
+                        location={evento.location}
+                        date={evento.date}
+                        musicType={evento.musicType}
+                        likes={evento.likes}
+                        mediaType={evento.mediaType}
+                      />
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -187,7 +206,7 @@ export default function Home() {
           </div>
         )}
 
-        {/* BARRA DE FILTROS */}
+        {/* BARRA DE FILTROS (LIMPIA DE ESTILOS EN LÍNEA) */}
         <div className="bg-night-800 p-4 sm:p-5 rounded-2xl border border-night-700 shadow-xl mb-10 flex flex-col lg:flex-row gap-4 items-center justify-between">
           <div className="flex flex-col md:flex-row flex-wrap xl:flex-nowrap gap-4 w-full flex-1">
             <div className="relative w-full md:flex-1">
@@ -197,11 +216,10 @@ export default function Home() {
                 title="Filtrar por fecha"
                 value={selectedDate} 
                 onChange={(e) => setSelectedDate(e.target.value)}
-                className={selectStyles}
-                style={{ colorScheme: 'dark' }}
+                className={`${selectStyles} [color-scheme:dark]`}
               >
                 {availableDates.map(date => (
-                  <option key={date} value={date} style={{ backgroundColor: '#111827', color: 'white' }}>
+                  <option key={date} value={date} className="bg-night-900 text-white">
                     {formatShortDate(date)}
                   </option>
                 ))}
@@ -214,11 +232,10 @@ export default function Home() {
                 title="Filtrar por zona"
                 value={selectedZone} 
                 onChange={(e) => setSelectedZone(e.target.value)}
-                className={selectStyles}
-                style={{ colorScheme: 'dark' }}
+                className={`${selectStyles} [color-scheme:dark]`}
               >
                 {availableZones.map(zone => (
-                  <option key={zone} value={zone} style={{ backgroundColor: '#111827', color: 'white' }}>
+                  <option key={zone} value={zone} className="bg-night-900 text-white">
                     {zone === 'Todas' ? 'Todas las zonas' : zone}
                   </option>
                 ))}
@@ -231,11 +248,10 @@ export default function Home() {
                 title="Filtrar por género musical"
                 value={selectedGenre} 
                 onChange={(e) => setSelectedGenre(e.target.value)}
-                className={selectStyles}
-                style={{ colorScheme: 'dark' }}
+                className={`${selectStyles} [color-scheme:dark]`}
               >
                 {availableGenres.map(genre => (
-                  <option key={genre} value={genre} style={{ backgroundColor: '#111827', color: 'white' }}>
+                  <option key={genre} value={genre} className="bg-night-900 text-white">
                     {genre === 'Todos' ? 'Todos los géneros' : genre}
                   </option>
                 ))}
@@ -303,6 +319,20 @@ export default function Home() {
           </div>
         )}
       </div>
+
+          {/* FOOTER AÑADIDO */}
+      <footer className="max-w-7xl mx-auto mt-20 pt-8 border-t border-night-700 flex flex-col md:flex-row items-center justify-between gap-4 text-gray-500 text-sm">
+        <p>© {new Date().getFullYear()} Jodas Tucumanas. Todos los derechos reservados.</p>
+        <div className="flex items-center gap-6">
+          <Link href="/terminos" className="hover:text-brand-primary transition-colors">
+            Términos y Condiciones
+          </Link>
+          <a href="#" className="hover:text-brand-primary transition-colors">
+            Contacto
+          </a>
+        </div>
+      </footer>
+      
     </main>
   );
 }

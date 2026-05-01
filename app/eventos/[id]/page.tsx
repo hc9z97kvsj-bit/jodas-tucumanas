@@ -4,9 +4,9 @@ import { useEffect, useState, use } from 'react';
 import { doc, getDoc, updateDoc, increment } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import Link from 'next/link';
-// Sumamos Share2 (Compartir) y Check (Tilde de copiado)
-import { ArrowLeft, MapPin, Calendar, Music, Loader2, X, ZoomIn, PlayCircle, Heart, Building, Share2, Check } from 'lucide-react';
-import { SiWhatsapp } from 'react-icons/si';
+import { ArrowLeft, MapPin, Calendar, Music, Loader2, X, ZoomIn, PlayCircle, Heart, Building, Share2, Check, PhoneOff, MessageCircle } from 'lucide-react';
+// Importamos el componente animado
+import StarBorder from '@/components/StarBorder';
 
 interface EventData {
   id: string;
@@ -54,7 +54,6 @@ export default function EventDetail({ params }: { params: Promise<{ id: string }
   const [hasLiked, setHasLiked] = useState(false);
   const [isLiking, setIsLiking] = useState(false);
   
-  // NUEVO: Estado para saber si el link se copió (para compus de escritorio)
   const [isCopied, setIsCopied] = useState(false);
 
   useEffect(() => {
@@ -110,7 +109,6 @@ export default function EventDetail({ params }: { params: Promise<{ id: string }
     }
   };
 
-  // NUEVA FUNCIÓN PARA COMPARTIR
   const handleShare = async () => {
     if (!event) return;
 
@@ -120,7 +118,6 @@ export default function EventDetail({ params }: { params: Promise<{ id: string }
       url: window.location.href,
     };
 
-    // Si está en celular o navegador moderno, abre el menú de apps
     if (navigator.share) {
       try {
         await navigator.share(shareData);
@@ -128,11 +125,10 @@ export default function EventDetail({ params }: { params: Promise<{ id: string }
         console.log('Compartir cancelado o con error:', err);
       }
     } else {
-      // Si está en una PC vieja que no soporta el menú, copia el link
       try {
         await navigator.clipboard.writeText(window.location.href);
         setIsCopied(true);
-        setTimeout(() => setIsCopied(false), 2500); // Vuelve al ícono normal después de 2.5s
+        setTimeout(() => setIsCopied(false), 2500); 
       } catch (err) {
         console.error("Error copiando el texto", err);
       }
@@ -159,144 +155,181 @@ export default function EventDetail({ params }: { params: Promise<{ id: string }
     );
   }
 
-  const handleWhatsAppClick = () => {
-    const cleanPhone = event.phone.replace(/\D/g, '');
-    const message = `Hola! Vengo de Jodas Tucumanas. Quiero info del evento: *${event.title}*`;
-    const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
-    window.open(url, '_blank');
-  };
-
   const isVideo = event.mediaType === 'video';
+  
+  // LÓGICA INTELIGENTE DE WHATSAPP
+  const hasPhone = event.phone && event.phone.trim() !== '';
+  const cleanPhone = hasPhone ? event.phone.replace(/\D/g, '') : '';
+  const whatsappMessage = `Hola! Vengo de Jodas Tucumanas. Quiero info del evento: *${event.title}*`;
+  const whatsappUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(whatsappMessage)}`;
 
   return (
     <>
-      <main className="min-h-screen bg-night-900 text-white py-6 px-4 sm:px-8">
-        <div className="max-w-3xl mx-auto">
+      <main className="min-h-screen bg-night-900 text-white pb-20">
+        
+        {/* BOTÓN FLOTANTE: Volver a la cartelera */}
+        <Link 
+          href="/" 
+          className="absolute top-6 left-4 sm:left-8 z-50 bg-black/50 backdrop-blur-md p-3 rounded-full text-white hover:bg-brand-primary hover:scale-105 transition-all border border-white/10 shadow-lg"
+          title="Volver"
+        >
+          <ArrowLeft size={24} />
+        </Link>
+
+        {/* 1. HEADER CON IMAGEN INMERSIVA */}
+        <div 
+          className="relative w-full h-80 sm:h-96 lg:h-[450px] cursor-pointer group" 
+          onClick={() => setIsImageModalOpen(true)}
+        >
+          {isVideo ? (
+            <video 
+              src={event.imageUrl} 
+              autoPlay 
+              loop 
+              muted 
+              playsInline
+              className="w-full h-full object-cover transition-opacity duration-300 group-hover:opacity-80 pointer-events-none"
+            />
+          ) : (
+            <img 
+              src={event.imageUrl} 
+              alt={event.title} 
+              className="w-full h-full object-cover transition-opacity duration-300 group-hover:opacity-80"
+            />
+          )}
           
-          <Link 
-            href="/" 
-            className="inline-flex items-center gap-2 text-gray-400 hover:text-white transition-colors mb-6"
-          >
-            <ArrowLeft className="w-5 h-5 shrink-0" />
-            <span className="font-medium">Volver a la cartelera</span>
-          </Link>
-
-          <div className="bg-night-800 rounded-2xl overflow-hidden border border-night-700 shadow-xl">
-            
-            <div 
-              className="w-full h-64 sm:h-96 bg-night-900 relative cursor-pointer group"
-              onClick={() => setIsImageModalOpen(true)}
-              title={isVideo ? "Ver video completo" : "Ver flyer completo"}
-            >
-              {isVideo ? (
-                <video 
-                  src={event.imageUrl} 
-                  autoPlay 
-                  loop 
-                  muted 
-                  playsInline
-                  className="w-full h-full object-cover transition-opacity duration-300 group-hover:opacity-70 pointer-events-none"
-                />
-              ) : (
-                <img 
-                  src={event.imageUrl} 
-                  alt={event.title} 
-                  className="w-full h-full object-cover transition-opacity duration-300 group-hover:opacity-70"
-                />
-              )}
-              
-              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                <div className="bg-black/60 backdrop-blur-sm p-4 rounded-full text-white">
-                  {isVideo ? <PlayCircle size={40} /> : <ZoomIn size={32} />}
-                </div>
-              </div>
-            </div>
-
-            <div className="p-5 sm:p-8">
-              <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-                <span className="inline-flex items-center gap-1.5 bg-brand-primary/20 text-brand-primary px-3 py-1.5 rounded-lg text-sm font-bold uppercase tracking-wider border border-brand-primary/30">
-                  <Music className="w-4 h-4 shrink-0" />
-                  {event.musicType}
-                </span>
-                
-                {/* BOTONES DE ACCIÓN (Compartir y Me gusta) */}
-                <div className="flex items-center gap-2">
-                  <button 
-                    onClick={handleShare}
-                    title="Compartir evento"
-                    className="flex items-center justify-center p-2.5 rounded-xl bg-night-900 text-gray-300 border border-night-700 hover:bg-night-700 hover:text-white transition-all"
-                  >
-                    {isCopied ? <Check size={20} className="text-green-400" /> : <Share2 size={20} />}
-                  </button>
-
-                  <button 
-                    onClick={handleLike}
-                    disabled={hasLiked || isLiking}
-                    className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all border ${
-                      hasLiked 
-                        ? 'bg-red-500/20 text-red-400 border-red-500/30' 
-                        : 'bg-night-900 text-gray-300 border-night-700 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/30'
-                    }`}
-                  >
-                    <Heart className={`w-5 h-5 ${hasLiked ? 'fill-current scale-110' : 'scale-100'} transition-transform`} />
-                    {likesCount} {likesCount === 1 ? 'Me gusta' : 'Me gusta'}
-                  </button>
-                </div>
-              </div>
-
-              <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white mb-6 leading-tight">
-                {event.title}
-              </h1>
-
-              <div className="flex flex-col gap-4 mb-8 bg-night-900/50 p-5 rounded-xl border border-night-700">
-                
-                <div className="flex items-center gap-3">
-                  <Calendar className="w-6 h-6 text-brand-accent shrink-0" />
-                  <span className="text-gray-200 capitalize text-lg">{formatearFecha(event.date)}</span>
-                </div>
-
-                {event.venue && (
-                  <div className="flex items-center gap-3">
-                    <Building className="w-6 h-6 text-brand-accent shrink-0" />
-                    <span className="text-white font-bold text-lg">{event.venue}</span>
-                  </div>
-                )}
-
-                <div className="flex items-center gap-3">
-                  <MapPin className="w-6 h-6 text-brand-accent shrink-0" />
-                  <span className="text-gray-200 text-lg">
-                    {event.location}
-                    {event.locality && event.locality !== 'Interior / Otra' && ` - ${event.locality}`}
-                  </span>
-                </div>
-
-              </div>
-
-              <button 
-                onClick={handleWhatsAppClick}
-                className="w-full flex items-center justify-center gap-3 bg-[#25D366] hover:bg-[#20bd5a] text-white px-6 py-4 rounded-xl font-bold text-lg transition-colors shadow-lg"
-              >
-                <SiWhatsapp className="w-6 h-6 shrink-0" />
-                <span>Consultar Reservas</span>
-              </button>
-
-              <hr className="border-night-700 my-8" />
-
-              <div>
-                <h3 className="text-xl font-bold mb-4 text-white">Acerca del evento</h3>
-                <p className="text-gray-400 whitespace-pre-line leading-relaxed text-lg">
-                  {event.description}
-                </p>
-              </div>
-
+          <div className="absolute inset-0 bg-gradient-to-t from-night-900 via-night-900/40 to-transparent"></div>
+          
+          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20">
+            <div className="bg-black/60 backdrop-blur-sm p-4 rounded-full text-white scale-90 group-hover:scale-100 transition-transform">
+              {isVideo ? <PlayCircle size={48} /> : <ZoomIn size={40} />}
             </div>
           </div>
         </div>
+
+        {/* 2. CONTENEDOR PRINCIPAL (Sube sobre la imagen) */}
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 relative z-10 -mt-24 sm:-mt-32">
+          
+          {/* Etiquetas flotantes y botones */}
+          <div className="flex justify-between items-end mb-4">
+            <div className="bg-brand-primary px-4 py-1.5 rounded-xl font-bold text-sm tracking-wider uppercase shadow-lg text-white flex items-center gap-2">
+              <Music size={16} />
+              {event.musicType}
+            </div>
+
+            {/* Botonera de interacción rápida */}
+            <div className="flex gap-3">
+              <button 
+                onClick={handleShare}
+                className="bg-night-800/80 backdrop-blur-md p-3 rounded-full border border-night-700 hover:bg-night-700 transition-colors text-white shadow-lg"
+              >
+                {isCopied ? <Check size={20} className="text-green-400" /> : <Share2 size={20} />}
+              </button>
+              
+              <button 
+                onClick={handleLike}
+                disabled={hasLiked || isLiking}
+                className={`flex items-center gap-2 px-4 py-2 rounded-full font-bold border transition-all shadow-lg backdrop-blur-md ${
+                  hasLiked 
+                  ? 'bg-red-500/20 border-red-500/50 text-red-500' 
+                  : 'bg-night-800/80 border-night-700 text-gray-300 hover:text-red-400'
+                }`}
+              >
+                <Heart size={20} className={hasLiked ? 'fill-current animate-pulse' : ''} />
+                <span>{likesCount}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Títulos */}
+          <div className="mb-8">
+            <h1 className="text-4xl sm:text-5xl font-extrabold text-white leading-tight mb-2 drop-shadow-lg">
+              {event.title}
+            </h1>
+            {event.venue && (
+              <h2 className="text-xl sm:text-2xl text-brand-primary font-semibold drop-shadow-md flex items-center gap-2">
+                <Building size={24} className="shrink-0" /> {event.venue}
+              </h2>
+            )}
+          </div>
+
+          {/* 3. TARJETA DE INFORMACIÓN MODULAR */}
+          <div className="bg-night-800 border border-night-700 rounded-3xl p-2 mb-8 shadow-xl">
+            
+            {/* Fila Fecha */}
+            <div className="flex items-center gap-4 p-4 hover:bg-night-700/50 rounded-2xl transition-colors">
+              <div className="bg-night-900 p-3.5 rounded-xl text-brand-accent shadow-inner border border-night-700/50">
+                <Calendar size={24} />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-400 mb-0.5">Fecha y Hora</p>
+                <p className="font-semibold text-white text-lg capitalize">{formatearFecha(event.date)}</p>
+              </div>
+            </div>
+
+            <div className="h-px bg-night-700 mx-4"></div>
+
+            {/* Fila Ubicación */}
+            <div className="flex items-center gap-4 p-4 hover:bg-night-700/50 rounded-2xl transition-colors">
+              <div className="bg-night-900 p-3.5 rounded-xl text-green-400 shadow-inner border border-night-700/50">
+                <MapPin size={24} />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-gray-400 mb-0.5">Ubicación</p>
+                <p className="font-semibold text-white">{event.location}</p>
+                {event.locality && event.locality !== 'Interior / Otra' && (
+                  <p className="text-sm text-gray-500">{event.locality}</p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* 4. LLAMADA A LA ACCIÓN ANIMADA (WhatsApp Inteligente con StarBorder) */}
+          <div className="mb-10 w-full">
+            {!hasPhone ? (
+              <button
+                disabled
+                className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-night-800 text-gray-500 rounded-2xl cursor-not-allowed border border-night-700 shadow-inner"
+              >
+                <PhoneOff size={24} />
+                <span className="text-lg font-bold tracking-wide">Sin número de contacto</span>
+              </button>
+            ) : (
+              <StarBorder
+                as="a"
+                href={whatsappUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full shadow-xl shadow-[#25D366]/10"
+                color="#25D366" 
+                speed="4s"      
+                thickness={2}   
+              >
+                <div className="flex items-center justify-center gap-3 px-6 py-4 text-white">
+                  <MessageCircle size={24} className="text-[#25D366]" />
+                  <span className="text-lg font-bold tracking-wide text-shadow-sm">Consultar Reservas</span>
+                </div>
+              </StarBorder>
+            )}
+          </div>
+
+          {/* 5. ACERCA DEL EVENTO */}
+          {event.description && (
+            <div className="bg-night-800/50 border border-night-700 rounded-3xl p-6 sm:p-8 mb-8">
+              <h3 className="text-xl font-bold mb-4 text-white">Acerca del evento</h3>
+              <p className="text-gray-400 whitespace-pre-line leading-relaxed text-lg">
+                {event.description}
+              </p>
+            </div>
+          )}
+
+        </div>
       </main>
 
+      {/* MODAL DE IMAGEN/VIDEO */}
       {isImageModalOpen && (
         <div 
-          className="fixed inset-0 z-50 bg-black/95 backdrop-blur-md flex items-center justify-center p-4 sm:p-8 cursor-pointer animate-in fade-in duration-200"
+          className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-md flex items-center justify-center p-4 sm:p-8 cursor-pointer animate-in fade-in duration-200"
           onClick={() => setIsImageModalOpen(false)}
         >
           <button 

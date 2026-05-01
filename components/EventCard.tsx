@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from 'react';
 import Link from 'next/link';
 import { MapPin, Calendar, Heart, Music } from 'lucide-react';
 
@@ -9,12 +12,12 @@ interface EventProps {
   location: string;
   date: string;
   musicType: string;
-  rating?: number; // Mantenemos esto por compatibilidad con eventos cargados antes
-  likes?: number;  // Nuevo contador de corazones
-  mediaType?: string; // Para saber si es 'image' o 'video'
+  rating?: number; 
+  likes?: number;  
+  mediaType?: string; 
+  // Ya no necesitamos el telefono acá, la tarjeta queda más limpia
 }
 
-// Función para traducir el formato técnico del calendario a texto legible
 function formatearFecha(fechaStr: string) {
   if (!fechaStr || !fechaStr.includes('-')) return fechaStr;
   try {
@@ -48,13 +51,28 @@ export default function EventCard({
   musicType, 
   rating, 
   likes, 
-  mediaType = 'image' 
+  mediaType = 'image'
 }: EventProps) {
   
   const fechaFormateada = formatearFecha(date);
-  
-  // Si el evento es nuevo usa "likes", si es viejo usa "rating", si no tiene ninguno usa 0
-  const likesCount = likes !== undefined ? likes : (rating || 0);
+  const likesIniciales = likes !== undefined ? likes : (rating || 0);
+
+  // Estado local para que el botón "Me gusta" reaccione al toque
+  const [isLiked, setIsLiked] = useState(false);
+  const [currentLikes, setCurrentLikes] = useState(likesIniciales);
+
+  // Función visual del Me Gusta (después podés conectarla a Firebase)
+  const handleLikeClick = (e: React.MouseEvent) => {
+    e.preventDefault(); // Evita que el click haga algo raro si lo envolvemos en un Link
+    if (isLiked) {
+      setCurrentLikes(prev => prev - 1);
+      setIsLiked(false);
+    } else {
+      setCurrentLikes(prev => prev + 1);
+      setIsLiked(true);
+    }
+    // ACÁ A FUTURO: Lógica para guardar el like en la base de datos
+  };
 
   return (
     <div className="group bg-night-800 rounded-2xl overflow-hidden border border-night-700 transition-all duration-300 hover:shadow-glow hover:-translate-y-1.5 flex flex-col h-full shadow-lg">
@@ -62,14 +80,13 @@ export default function EventCard({
       {/* 1. SECCIÓN SUPERIOR: Imagen o Video Automático */}
       <div className="relative h-56 w-full bg-night-900 overflow-hidden">
         
-        {/* LÓGICA MULTIMEDIA: Elige qué renderizar */}
         {mediaType === 'video' ? (
           <video 
             src={imageUrl} 
             autoPlay 
             loop 
             muted 
-            playsInline // Fundamental para que en iPhone no se abra en pantalla completa solo
+            playsInline 
             className="object-cover w-full h-full transition-transform duration-700 group-hover:scale-105 pointer-events-none"
           />
         ) : (
@@ -79,15 +96,8 @@ export default function EventCard({
             className="object-cover w-full h-full transition-transform duration-700 group-hover:scale-105"
           />
         )}
-        
-        {/* Etiquetas Flotantes */}
-        <div className="absolute top-3 left-3">
-          <div className="flex items-center gap-1.5 bg-night-900/95 px-2.5 py-1.5 rounded-lg text-xs font-bold text-red-400 border border-night-700 shadow-md backdrop-blur-sm transition-transform hover:scale-105">
-            <Heart size={14} className="fill-current" />
-            <span>{likesCount}</span>
-          </div>
-        </div>
 
+        {/* Solo dejamos la etiqueta flotante de la Música, queda mucho más limpio */}
         <div className="absolute top-3 right-3">
           <div className="flex items-center gap-1.5 bg-brand-primary/95 px-3 py-1.5 rounded-lg text-xs font-bold text-white uppercase tracking-wider border border-brand-primary/50 shadow-md backdrop-blur-sm">
             <Music size={14} />
@@ -110,7 +120,6 @@ export default function EventCard({
           )}
         </div>
         
-        {/* Detalles (Fecha y Lugar) con íconos encapsulados */}
         <div className="space-y-2.5 mb-6">
           <div className="flex items-center gap-3 text-gray-300 text-sm">
             <div className="bg-night-900 p-1.5 rounded-md border border-night-700">
@@ -126,13 +135,31 @@ export default function EventCard({
           </div>
         </div>
 
-        {/* Botón de acción */}
-        <Link 
-          href={`/eventos/${id}`}
-          className="w-full flex items-center justify-center bg-night-900 hover:bg-brand-primary text-white py-3 rounded-xl font-semibold transition-all duration-300 border border-night-700 hover:border-brand-primary shadow-sm mt-auto"
-        >
-          Ver más detalles
-        </Link>
+        {/* BOTONERA ESTRATÉGICA: Me Gusta + Detalles */}
+        <div className="flex gap-3 mt-auto">
+          
+          {/* Botón interactivo de Me Gusta */}
+          <button 
+            onClick={handleLikeClick}
+            className={`flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-bold transition-all duration-300 border shadow-sm ${
+              isLiked 
+              ? 'bg-red-500/10 border-red-500/50 text-red-500 scale-[1.02]' 
+              : 'bg-night-900 border-night-700 text-gray-400 hover:border-red-500/30 hover:text-red-400'
+            }`}
+            title="Me gusta"
+          >
+            <Heart size={20} className={isLiked ? 'fill-current animate-pulse' : ''} />
+            <span className="text-sm">{currentLikes}</span>
+          </button>
+
+          {/* Botón principal de llamada a la acción */}
+          <Link 
+            href={`/eventos/${id}`}
+            className="flex-1 flex items-center justify-center bg-brand-primary hover:brightness-110 text-white py-3 rounded-xl font-semibold transition-all duration-300 border border-transparent shadow-sm hover:scale-[1.02]"
+          >
+            Ver más detalles
+          </Link>
+        </div>
 
       </div>
     </div>

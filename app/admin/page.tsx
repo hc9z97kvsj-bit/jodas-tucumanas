@@ -75,6 +75,9 @@ export default function AdminPage() {
   const [successMessage, setSuccessMessage] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
 
+  // NUEVO: Estado para la casilla de "Sin número"
+  const [sinNumero, setSinNumero] = useState(false);
+
   const [formData, setFormData] = useState({
     title: '',
     venue: '',
@@ -86,7 +89,7 @@ export default function AdminPage() {
     phone: '',
     description: '',
     rating: 5,
-    mediaType: 'image' // <-- Valor por defecto
+    mediaType: 'image'
   });
 
   useEffect(() => {
@@ -126,21 +129,29 @@ export default function AdminPage() {
     setIsSubmitting(true);
 
     try {
+      // Lógica "Sin número": Si está tildado, forzamos el teléfono vacío
+      const eventPayload = {
+        ...formData,
+        phone: sinNumero ? '' : formData.phone
+      };
+
       if (editingId) {
         const eventRef = doc(db, 'eventos', editingId);
-        await updateDoc(eventRef, { ...formData });
+        await updateDoc(eventRef, eventPayload);
         setSuccessMessage('Evento actualizado correctamente');
       } else {
         await addDoc(collection(db, 'eventos'), {
-          ...formData,
+          ...eventPayload,
           createdAt: new Date().toISOString()
         });
         setSuccessMessage('Evento publicado en la cartelera');
       }
 
+      // Reseteamos el formulario y la casilla
       setFormData({
         title: '', venue: '', imageUrl: '', location: '', locality: 'San Miguel de Tucumán', date: '', musicType: 'Cuarteto', phone: '', description: '', rating: 5, mediaType: 'image'
       });
+      setSinNumero(false);
       setEditingId(null);
       fetchEvents();
       
@@ -165,9 +176,13 @@ export default function AdminPage() {
       phone: evento.phone || '',
       description: evento.description || '',
       rating: evento.rating || 5,
-      mediaType: evento.mediaType || 'image' // <-- Previene errores en eventos viejos
+      mediaType: evento.mediaType || 'image'
     });
     setEditingId(evento.id);
+    
+    // Si el evento viejo no tiene teléfono, marcamos la casilla de "Sin número" automáticamente
+    setSinNumero(!evento.phone || evento.phone.trim() === '');
+    
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -185,6 +200,12 @@ export default function AdminPage() {
   const handleLogout = async () => {
     await signOut(auth);
     router.push('/');
+  };
+
+  const resetForm = () => {
+    setEditingId(null);
+    setSinNumero(false);
+    setFormData({ title: '', venue: '', imageUrl: '', location: '', locality: 'San Miguel de Tucumán', date: '', musicType: 'Cuarteto', phone: '', description: '', rating: 5, mediaType: 'image' });
   };
 
   if (loadingAuth) {
@@ -288,7 +309,6 @@ export default function AdminPage() {
               </div>
             </div>
 
-            {/* SECCIÓN ACTUALIZADA: Formato y Enlace */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label htmlFor="mediaType" className={labelStyles}>Formato del Flyer</label>
@@ -310,10 +330,38 @@ export default function AdminPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="md:col-span-2">
-                <label htmlFor="phone" className={labelStyles}>WhatsApp (Para reservas)</label>
-                <input id="phone" required type="text" name="phone" value={formData.phone} onChange={handleChange} placeholder="Ej: 5493810000000 sin el +" className={inputStyles} />
+            {/* SECCIÓN ACTUALIZADA: WhatsApp Inteligente */}
+            <div className="bg-night-900/50 p-4 rounded-xl border border-night-700">
+              <label htmlFor="phone" className={labelStyles}>WhatsApp (Para reservas)</label>
+              <div className="flex flex-col gap-3 mt-2">
+                <input 
+                  id="phone" 
+                  type="text" 
+                  name="phone" 
+                  value={formData.phone} 
+                  onChange={handleChange} 
+                  placeholder="Ej: 5493810000000 sin el +" 
+                  required={!sinNumero}
+                  disabled={sinNumero}
+                  className={`${inputStyles} ${sinNumero ? 'opacity-40 cursor-not-allowed bg-night-800' : ''}`}
+                />
+                
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={sinNumero}
+                    onChange={(e) => {
+                      setSinNumero(e.target.checked);
+                      if (e.target.checked) {
+                        setFormData((prev) => ({ ...prev, phone: "" }));
+                      }
+                    }}
+                    className="w-5 h-5 rounded border-night-700 text-brand-primary focus:ring-brand-primary bg-night-900"
+                  />
+                  <span className="text-sm font-medium text-gray-300">
+                    (x) El organizador no dejó número de contacto
+                  </span>
+                </label>
               </div>
             </div>
 
@@ -322,7 +370,7 @@ export default function AdminPage() {
               <textarea id="description" required name="description" value={formData.description} onChange={handleChange} rows={3} className={`${inputStyles} resize-none`}></textarea>
             </div>
 
-            <div className="flex items-center gap-4 pt-4 border-t border-night-700">
+            <div className="flex flex-wrap items-center gap-4 pt-4 border-t border-night-700">
               <button 
                 type="submit" 
                 disabled={isSubmitting}
@@ -333,13 +381,13 @@ export default function AdminPage() {
               </button>
               
               {editingId && (
-                <button type="button" onClick={() => { setEditingId(null); setFormData({ title: '', venue: '', imageUrl: '', location: '', locality: 'San Miguel de Tucumán', date: '', musicType: 'Cuarteto', phone: '', description: '', rating: 5, mediaType: 'image' }); }} className="text-gray-400 hover:text-white px-4">
+                <button type="button" onClick={resetForm} className="text-gray-400 hover:text-white px-4 py-2 border border-transparent hover:border-night-700 rounded-lg transition-all">
                   Cancelar
                 </button>
               )}
 
               {successMessage && (
-                <div className="flex items-center gap-2 text-green-400 text-sm animate-pulse ml-auto">
+                <div className="flex items-center gap-2 text-green-400 text-sm animate-pulse md:ml-auto w-full md:w-auto mt-2 md:mt-0">
                   <CheckCircle size={18} />
                   <span>{successMessage}</span>
                 </div>
