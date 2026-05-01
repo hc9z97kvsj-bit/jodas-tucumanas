@@ -1,10 +1,12 @@
-"use client";
+'use client';
 
-import { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { MapPin, Calendar, Heart, Music } from 'lucide-react';
+import { doc, updateDoc, increment } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { Heart, Share2, MapPin, Calendar, Music } from 'lucide-react';
 
-interface EventProps {
+interface EventCardProps {
   id: string;
   title: string;
   venue?: string;
@@ -12,156 +14,174 @@ interface EventProps {
   location: string;
   date: string;
   musicType: string;
-  rating?: number; 
-  likes?: number;  
-  mediaType?: string; 
-  // Ya no necesitamos el telefono acá, la tarjeta queda más limpia
+  rating?: number;
+  likes?: number;
+  mediaType?: string;
 }
 
-function formatearFecha(fechaStr: string) {
-  if (!fechaStr || !fechaStr.includes('-')) return fechaStr;
-  try {
-    const [fechaLocal, hora] = fechaStr.split('T');
-    const [year, month, day] = fechaLocal.split('-');
-    const fecha = new Date(Number(year), Number(month) - 1, Number(day));
-    
-    const dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
-    const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+export default function EventCard({
+  id,
+  title,
+  venue,
+  imageUrl,
+  location,
+  date,
+  musicType,
+  likes = 0,
+  mediaType, // Acá recuperamos el dato de si es foto o video
+}: EventCardProps) {
+  const [likesCount, setLikesCount] = useState(Number(likes));
+  const [hasLiked, setHasLiked] = useState(false);
+  const [isLiking, setIsLiking] = useState(false);
+  const [isCopied, setIsCopied] = useState(false);
 
-    const nombreDia = dias[fecha.getDay()];
-    const numeroDia = String(fecha.getDate()).padStart(2, '0');
-    const nombreMes = meses[fecha.getMonth()];
-
-    let resultado = `${nombreDia} ${numeroDia} de ${nombreMes}`;
-    if (hora) resultado += ` a las ${hora}hs`;
-
-    return resultado;
-  } catch (error) {
-    return fechaStr;
-  }
-}
-
-export default function EventCard({ 
-  id, 
-  title, 
-  venue, 
-  imageUrl, 
-  location, 
-  date, 
-  musicType, 
-  rating, 
-  likes, 
-  mediaType = 'image'
-}: EventProps) {
-  
-  const fechaFormateada = formatearFecha(date);
-  const likesIniciales = likes !== undefined ? likes : (rating || 0);
-
-  // Estado local para que el botón "Me gusta" reaccione al toque
-  const [isLiked, setIsLiked] = useState(false);
-  const [currentLikes, setCurrentLikes] = useState(likesIniciales);
-
-  // Función visual del Me Gusta (después podés conectarla a Firebase)
-  const handleLikeClick = (e: React.MouseEvent) => {
-    e.preventDefault(); // Evita que el click haga algo raro si lo envolvemos en un Link
-    if (isLiked) {
-      setCurrentLikes(prev => prev - 1);
-      setIsLiked(false);
-    } else {
-      setCurrentLikes(prev => prev + 1);
-      setIsLiked(true);
+  useEffect(() => {
+    const liked = localStorage.getItem(`liked_${id}`);
+    if (liked === 'true') {
+      setHasLiked(true);
     }
-    // ACÁ A FUTURO: Lógica para guardar el like en la base de datos
+  }, [id]);
+
+  const formatDate = (dateString: string) => {
+    try {
+      const [year, month, day] = dateString.split('T')[0].split('-');
+      return `${day}/${month}/${year}`;
+    } catch {
+      return dateString;
+    }
   };
 
-  return (
-    <div className="group bg-night-800 rounded-2xl overflow-hidden border border-night-700 transition-all duration-300 hover:shadow-glow hover:-translate-y-1.5 flex flex-col h-full shadow-lg">
-      
-      {/* 1. SECCIÓN SUPERIOR: Imagen o Video Automático */}
-      <div className="relative h-56 w-full bg-night-900 overflow-hidden">
-        
-        {mediaType === 'video' ? (
-          <video 
-            src={imageUrl} 
-            autoPlay 
-            loop 
-            muted 
-            playsInline 
-            className="object-cover w-full h-full transition-transform duration-700 group-hover:scale-105 pointer-events-none"
-          />
-        ) : (
-          <img 
-            src={imageUrl} 
-            alt={title} 
-            className="object-cover w-full h-full transition-transform duration-700 group-hover:scale-105"
-          />
-        )}
+  const handleLike = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
 
-        {/* Solo dejamos la etiqueta flotante de la Música, queda mucho más limpio */}
-        <div className="absolute top-3 right-3">
-          <div className="flex items-center gap-1.5 bg-brand-primary/95 px-3 py-1.5 rounded-lg text-xs font-bold text-white uppercase tracking-wider border border-brand-primary/50 shadow-md backdrop-blur-sm">
-            <Music size={14} />
-            <span>{musicType}</span>
+    if (hasLiked || isLiking) return; 
+    
+    setIsLiking(true);
+    try {
+      setLikesCount(prev => prev + 1);
+      setHasLiked(true);
+      localStorage.setItem(`liked_${id}`, 'true');
+      
+      const eventRef = doc(db, 'eventos', id);
+      await updateDoc(eventRef, {
+        likes: increment(1)
+      });
+    } catch (error) {
+      console.error("Error al dar like", error);
+      setLikesCount(prev => prev - 1);
+      setHasLiked(false);
+      localStorage.removeItem(`liked_${id}`);
+    } finally {
+      setIsLiking(false);
+    }
+  };
+
+  const handleShare = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const shareData = {
+      title: title,
+      text: `¡Mirá esta joda en Tucumán! 🔥 ${title} en ${venue || location}`,
+      url: `${window.location.origin}/eventos/${id}`,
+    };
+
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+      } catch (err) {
+        console.log('Compartir cancelado o con error:', err);
+      }
+    } else {
+      try {
+        await navigator.clipboard.writeText(shareData.url);
+        setIsCopied(true);
+        setTimeout(() => setIsCopied(false), 2500); 
+      } catch (err) {
+        console.error("Error copiando el texto", err);
+      }
+    }
+  };
+
+  // Verificamos si es video por la base de datos o si la URL termina en .mp4
+  const isVideo = mediaType === 'video' || (imageUrl && imageUrl.toLowerCase().includes('.mp4'));
+
+  return (
+    <Link href={`/eventos/${id}`} className="group block h-full">
+      <div className="bg-night-800 rounded-2xl border border-night-700 overflow-hidden hover:border-night-600 transition-all duration-300 h-full flex flex-col hover:shadow-xl hover:-translate-y-1">
+        
+        {/* Cabecera con Imagen O Video */}
+        <div className="relative aspect-[4/3] w-full bg-night-900 overflow-hidden">
+          {isVideo ? (
+            <video
+              src={imageUrl}
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+              autoPlay
+              loop
+              muted
+              playsInline
+            />
+          ) : (
+            <img 
+              src={imageUrl} 
+              alt={title} 
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+              loading="lazy"
+            />
+          )}
+          
+          <div className="absolute top-3 right-3 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full flex items-center gap-1.5 border border-white/10 text-white text-xs font-semibold shadow-lg">
+            <Music size={12} className="text-brand-primary" />
+            {musicType}
           </div>
         </div>
-      </div>
-      
-      {/* 2. SECCIÓN INFERIOR: Información del evento */}
-      <div className="p-5 sm:p-6 flex-1 flex flex-col justify-between bg-night-800">
-        
-        <div className="mb-5">
-          <h3 className="text-xl sm:text-2xl font-bold text-white leading-tight mb-1.5 line-clamp-1" title={title}>
+
+        {/* Cuerpo de la Tarjeta */}
+        <div className="p-5 flex-1 flex flex-col">
+          <h3 className="text-xl font-bold text-white mb-3 line-clamp-2 leading-tight group-hover:text-brand-primary transition-colors">
             {title}
           </h3>
-          {venue && (
-            <p className="text-brand-primary font-medium text-sm uppercase tracking-wide flex items-center gap-1.5">
-               {venue}
-            </p>
-          )}
-        </div>
-        
-        <div className="space-y-2.5 mb-6">
-          <div className="flex items-center gap-3 text-gray-300 text-sm">
-            <div className="bg-night-900 p-1.5 rounded-md border border-night-700">
-              <Calendar size={16} className="text-brand-accent flex-shrink-0" />
-            </div>
-            <span className="capitalize font-medium">{fechaFormateada}</span>
-          </div>
-          <div className="flex items-center gap-3 text-gray-300 text-sm">
-            <div className="bg-night-900 p-1.5 rounded-md border border-night-700">
-              <MapPin size={16} className="text-brand-accent flex-shrink-0" />
-            </div>
-            <span className="font-medium line-clamp-1" title={location}>{location}</span>
-          </div>
-        </div>
-
-        {/* BOTONERA ESTRATÉGICA: Me Gusta + Detalles */}
-        <div className="flex gap-3 mt-auto">
           
-          {/* Botón interactivo de Me Gusta */}
-          <button 
-            onClick={handleLikeClick}
-            className={`flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-bold transition-all duration-300 border shadow-sm ${
-              isLiked 
-              ? 'bg-red-500/10 border-red-500/50 text-red-500 scale-[1.02]' 
-              : 'bg-night-900 border-night-700 text-gray-400 hover:border-red-500/30 hover:text-red-400'
-            }`}
-            title="Me gusta"
-          >
-            <Heart size={20} className={isLiked ? 'fill-current animate-pulse' : ''} />
-            <span className="text-sm">{currentLikes}</span>
-          </button>
+          <div className="space-y-2 mt-auto mb-5 text-gray-400 text-sm">
+            <div className="flex items-center gap-2">
+              <Calendar size={16} className="text-gray-500 flex-shrink-0" />
+              <span>{formatDate(date)}</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <MapPin size={16} className="text-gray-500 flex-shrink-0 mt-0.5" />
+              <span className="line-clamp-1">{venue ? `${venue} - ${location}` : location}</span>
+            </div>
+          </div>
 
-          {/* Botón principal de llamada a la acción */}
-          <Link 
-            href={`/eventos/${id}`}
-            className="flex-1 flex items-center justify-center bg-brand-primary hover:brightness-110 text-white py-3 rounded-xl font-semibold transition-all duration-300 border border-transparent shadow-sm hover:scale-[1.02]"
-          >
-            Ver más detalles
-          </Link>
+          <hr className="border-night-700 mb-4" />
+
+          {/* Botones de Interacción */}
+          <div className="flex items-center justify-between">
+            <button 
+              onClick={handleLike}
+              disabled={isLiking || hasLiked}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all ${
+                hasLiked 
+                  ? 'border-brand-primary/50 bg-brand-primary/10 text-brand-primary cursor-default' 
+                  : 'border-night-600 bg-night-700/50 text-gray-300 hover:bg-night-600 hover:text-white'
+              }`}
+            >
+              <Heart size={16} className={hasLiked ? "fill-brand-primary text-brand-primary" : ""} />
+              <span className="font-semibold text-sm">{likesCount}</span>
+            </button>
+
+            <button 
+              onClick={handleShare}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-night-600 bg-night-700/50 text-gray-300 hover:bg-night-600 hover:text-white transition-all text-sm font-semibold"
+            >
+              <Share2 size={16} />
+              {isCopied ? '¡Copiado!' : 'Compartir'}
+            </button>
+          </div>
         </div>
 
       </div>
-    </div>
+    </Link>
   );
 }

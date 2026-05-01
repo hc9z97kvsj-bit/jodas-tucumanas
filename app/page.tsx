@@ -5,8 +5,8 @@ import { collection, getDocs, orderBy, query } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import EventCard from '@/components/EventCard';
 import StarBorder from '@/components/StarBorder';
-import { Loader2, MapPin, Music, FilterX, Calendar, Flame } from 'lucide-react';
 import Link from 'next/link';
+import { Loader2, MapPin, Music, FilterX, Calendar, Flame } from 'lucide-react';
 
 interface EventData {
   id: string;
@@ -62,10 +62,9 @@ export default function Home() {
     fetchEvents();
   }, []);
 
-  // --- LÓGICA DEL RANKING "ALTA JODA" ---
   const topEventos = useMemo(() => {
-    const eventosConLikes = events.filter(e => (e.likes || 0) > 0);
-    const ordenados = eventosConLikes.sort((a, b) => (b.likes || 0) - (a.likes || 0));
+    const eventosConLikes = events.filter(e => Number(e.likes || 0) > 0);
+    const ordenados = eventosConLikes.sort((a, b) => Number(b.likes || 0) - Number(a.likes || 0));
     return ordenados.slice(0, 3);
   }, [events]);
 
@@ -132,7 +131,7 @@ export default function Home() {
         <h1 className="text-4xl md:text-5xl font-bold mb-4 tracking-tight">
           Descubrí la noche en <span className="text-brand-primary">Tucumán</span>
         </h1>
-        <p className="text-gray-400 text-lg max-w-2xl mx-auto">
+        <p className="text-gray-400 text-lg max-w-2xl mx-auto mb-8">
           Encontrá los mejores bailes, recitales y fiestas. Filtrá por zona, género o fecha y armá tu salida perfecta.
         </p>
       </div>
@@ -154,7 +153,6 @@ export default function Home() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {topEventos.map((evento, index) => (
                 <div key={evento.id} className="relative h-full">
-                  {/* Etiqueta de Top */}
                   <div className={`absolute -top-4 -right-4 z-[50] w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg shadow-xl border-4 border-night-900
                     ${index === 0 ? 'bg-yellow-400 text-yellow-900 shadow-yellow-500/50' : 
                       index === 1 ? 'bg-gray-300 text-gray-800' : 
@@ -163,15 +161,8 @@ export default function Home() {
                     #{index + 1}
                   </div>
                   
-                  {/* MAGIA: Si es el #1, lo envolvemos en el StarBorder */}
                   {index === 0 ? (
-                    <StarBorder
-                      as="div"
-                      color="#f97316"
-                      speed="4s"
-                      thickness={3}
-                      className="h-full w-full"
-                    >
+                    <StarBorder as="div" color="#f97316" speed="4s" thickness={3} className="h-full w-full">
                       <EventCard 
                         id={evento.id}
                         title={evento.title}
@@ -206,77 +197,45 @@ export default function Home() {
           </div>
         )}
 
-        {/* BARRA DE FILTROS (LIMPIA DE ESTILOS EN LÍNEA) */}
+        {/* BARRA DE FILTROS */}
         <div className="bg-night-800 p-4 sm:p-5 rounded-2xl border border-night-700 shadow-xl mb-10 flex flex-col lg:flex-row gap-4 items-center justify-between">
           <div className="flex flex-col md:flex-row flex-wrap xl:flex-nowrap gap-4 w-full flex-1">
             <div className="relative w-full md:flex-1">
               <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-primary w-5 h-5 pointer-events-none" />
-              <select 
-                aria-label="Filtrar por fecha"
-                title="Filtrar por fecha"
-                value={selectedDate} 
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className={`${selectStyles} [color-scheme:dark]`}
-              >
+              <select value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className={`${selectStyles} [color-scheme:dark]`}>
                 {availableDates.map(date => (
-                  <option key={date} value={date} className="bg-night-900 text-white">
-                    {formatShortDate(date)}
-                  </option>
+                  <option key={date} value={date} className="bg-night-900 text-white">{formatShortDate(date)}</option>
                 ))}
               </select>
             </div>
             <div className="relative w-full md:flex-1">
               <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-primary w-5 h-5 pointer-events-none" />
-              <select 
-                aria-label="Filtrar por zona"
-                title="Filtrar por zona"
-                value={selectedZone} 
-                onChange={(e) => setSelectedZone(e.target.value)}
-                className={`${selectStyles} [color-scheme:dark]`}
-              >
+              <select value={selectedZone} onChange={(e) => setSelectedZone(e.target.value)} className={`${selectStyles} [color-scheme:dark]`}>
                 {availableZones.map(zone => (
-                  <option key={zone} value={zone} className="bg-night-900 text-white">
-                    {zone === 'Todas' ? 'Todas las zonas' : zone}
-                  </option>
+                  <option key={zone} value={zone} className="bg-night-900 text-white">{zone === 'Todas' ? 'Todas las zonas' : zone}</option>
                 ))}
               </select>
             </div>
             <div className="relative w-full md:flex-1">
               <Music className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-primary w-5 h-5 pointer-events-none" />
-              <select 
-                aria-label="Filtrar por género musical"
-                title="Filtrar por género musical"
-                value={selectedGenre} 
-                onChange={(e) => setSelectedGenre(e.target.value)}
-                className={`${selectStyles} [color-scheme:dark]`}
-              >
+              <select value={selectedGenre} onChange={(e) => setSelectedGenre(e.target.value)} className={`${selectStyles} [color-scheme:dark]`}>
                 {availableGenres.map(genre => (
-                  <option key={genre} value={genre} className="bg-night-900 text-white">
-                    {genre === 'Todos' ? 'Todos los géneros' : genre}
-                  </option>
+                  <option key={genre} value={genre} className="bg-night-900 text-white">{genre === 'Todos' ? 'Todos los géneros' : genre}</option>
                 ))}
               </select>
             </div>
           </div>
           {(selectedZone !== 'Todas' || selectedGenre !== 'Todos' || selectedDate !== 'Todas') && (
-            <button 
-              onClick={clearFilters}
-              className="flex items-center gap-2 text-sm text-gray-400 hover:text-white bg-night-900 hover:bg-night-700 px-4 py-3 rounded-xl border border-night-700 transition-colors w-full lg:w-auto justify-center whitespace-nowrap"
-            >
-              <FilterX size={18} />
-              Limpiar filtros
+            <button onClick={clearFilters} className="flex items-center gap-2 text-sm text-gray-400 hover:text-white bg-night-900 hover:bg-night-700 px-4 py-3 rounded-xl border border-night-700 transition-colors w-full lg:w-auto justify-center whitespace-nowrap">
+              <FilterX size={18} /> Limpiar filtros
             </button>
           )}
         </div>
 
-        {/* Título de Resultados Generales */}
+        {/* Resultados Generales */}
         <div className="mb-6 flex items-end justify-between">
-          <h2 className="text-2xl font-bold text-white border-b-2 border-brand-primary pb-2 inline-block">
-            Cartelera General
-          </h2>
-          <span className="text-gray-400 text-sm font-medium">
-            {filteredEvents.length} {filteredEvents.length === 1 ? 'evento' : 'eventos'}
-          </span>
+          <h2 className="text-2xl font-bold text-white border-b-2 border-brand-primary pb-2 inline-block">Cartelera General</h2>
+          <span className="text-gray-400 text-sm font-medium">{filteredEvents.length} {filteredEvents.length === 1 ? 'evento' : 'eventos'}</span>
         </div>
 
         {/* GRILLA DE EVENTOS */}
@@ -292,47 +251,27 @@ export default function Home() {
         ) : filteredEvents.length === 0 ? (
           <div className="text-center py-20 text-gray-400 border border-night-700 rounded-3xl bg-night-800/50 border-dashed">
             <p className="text-lg mb-4">No encontramos eventos con esos filtros.</p>
-            <button 
-              onClick={clearFilters}
-              className="bg-brand-primary text-white px-6 py-2.5 rounded-xl font-medium hover:bg-brand-primary/90 transition-colors"
-            >
+            <button onClick={clearFilters} className="bg-brand-primary text-white px-6 py-2.5 rounded-xl font-medium hover:bg-brand-primary/90 transition-colors">
               Ver todos los eventos
             </button>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {filteredEvents.map((evento) => (
-              <EventCard 
-                key={evento.id}
-                id={evento.id}
-                title={evento.title}
-                venue={evento.venue}
-                imageUrl={evento.imageUrl}
-                location={evento.location}
-                date={evento.date}
-                musicType={evento.musicType}
-                rating={evento.rating}
-                likes={evento.likes}
-                mediaType={evento.mediaType}
-              />
+              <EventCard key={evento.id} {...evento} />
             ))}
           </div>
         )}
       </div>
 
-          {/* FOOTER AÑADIDO */}
+      {/* FOOTER */}
       <footer className="max-w-7xl mx-auto mt-20 pt-8 border-t border-night-700 flex flex-col md:flex-row items-center justify-between gap-4 text-gray-500 text-sm">
         <p>© {new Date().getFullYear()} Jodas Tucumanas. Todos los derechos reservados.</p>
         <div className="flex items-center gap-6">
-          <Link href="/terminos" className="hover:text-brand-primary transition-colors">
-            Términos y Condiciones
-          </Link>
-          <a href="#" className="hover:text-brand-primary transition-colors">
-            Contacto
-          </a>
+          <Link href="/terminos" className="hover:text-brand-primary transition-colors">Términos y Condiciones</Link>
+          <a href="#" className="hover:text-brand-primary transition-colors">Contacto</a>
         </div>
       </footer>
-      
     </main>
   );
 }
