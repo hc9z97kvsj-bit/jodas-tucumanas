@@ -1,53 +1,22 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy } from 'firebase/firestore';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { db, auth } from '@/lib/firebase';
 import { useRouter } from 'next/navigation';
-import { CalendarPlus, Save, CheckCircle, Loader2, Edit, Trash2, LogOut } from 'lucide-react';
+import { CalendarPlus, Save, CheckCircle, Loader2, Edit, Trash2, LogOut, Calendar, FilterX } from 'lucide-react';
 
-// Listado hiper completo de localidades y comunas de Tucumán (Ordenado alfabéticamente)
+// Listado hiper completo de localidades y comunas de Tucumán
 const localidadesTucuman = [
-  "Aguilares",
-  "Alderetes",
-  "Amaicha del Valle",
-  "Banda del Río Salí",
-  "Bella Vista",
-  "Burruyacú",
-  "Colalao del Valle",
-  "Concepción",
-  "Delfín Gallo",
-  "El Cadillal",
-  "El Manantial",
-  "Estación Aráoz",
-  "Famaillá",
-  "Graneros",
-  "Juan Bautista Alberdi",
-  "La Cocha",
-  "La Florida",
-  "Las Talitas",
-  "Leales",
-  "Los Ralos",
-  "Lules",
-  "Monteros",
-  "Raco",
-  "Ranchillos",
-  "Río Seco",
-  "San Andrés",
-  "San Javier",
-  "San Miguel de Tucumán",
-  "San Pablo",
-  "San Pedro de Colalao",
-  "Santa Ana",
-  "Simoca",
-  "Tafí del Valle",
-  "Tafí Viejo",
-  "Trancas",
-  "Villa Carmela",
-  "Villa Quinteros",
-  "Yerba Buena",
-  "Interior / Otra"
+  "Aguilares", "Alderetes", "Acheral", "Amaicha del Valle", "Banda del Río Salí",
+  "Bella Vista", "Burruyacú", "Colalao del Valle", "Cruz Alta", "Concepción",
+  "Delfín Gallo", "El Cadillal", "El Manantial", "Estación Aráoz", "Famaillá",
+  "Graneros", "Juan Bautista Alberdi", "La Cocha", "La Florida", "Las Talitas",
+  "Leales", "Lastenia", "Los Ralos", "Lules", "Monteros", "Raco", "Ranchillos",
+  "Río Seco", "San Andrés", "San Javier", "San Miguel de Tucumán", "San Pablo",
+  "San Pedro de Colalao", "Santa Ana", "Simoca", "Tafí del Valle", "Tafí Viejo",
+  "Trancas", "Villa Carmela", "Villa Quinteros", "Yerba Buena", "Interior / Otra"
 ];
 
 interface EventData {
@@ -62,7 +31,7 @@ interface EventData {
   phone: string;
   description: string;
   rating: number;
-  mediaType: string; // <-- NUEVO: Para saber si es imagen o video
+  mediaType: string; 
 }
 
 export default function AdminPage() {
@@ -75,8 +44,10 @@ export default function AdminPage() {
   const [successMessage, setSuccessMessage] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  // NUEVO: Estado para la casilla de "Sin número"
   const [sinNumero, setSinNumero] = useState(false);
+
+  // NUEVO: Estado para el filtro de fechas en la tabla
+  const [filterDate, setFilterDate] = useState('Todas');
 
   const [formData, setFormData] = useState({
     title: '',
@@ -129,7 +100,6 @@ export default function AdminPage() {
     setIsSubmitting(true);
 
     try {
-      // Lógica "Sin número": Si está tildado, forzamos el teléfono vacío
       const eventPayload = {
         ...formData,
         phone: sinNumero ? '' : formData.phone
@@ -147,7 +117,6 @@ export default function AdminPage() {
         setSuccessMessage('Evento publicado en la cartelera');
       }
 
-      // Reseteamos el formulario y la casilla
       setFormData({
         title: '', venue: '', imageUrl: '', location: '', locality: 'San Miguel de Tucumán', date: '', musicType: 'Cuarteto', phone: '', description: '', rating: 5, mediaType: 'image'
       });
@@ -180,7 +149,6 @@ export default function AdminPage() {
     });
     setEditingId(evento.id);
     
-    // Si el evento viejo no tiene teléfono, marcamos la casilla de "Sin número" automáticamente
     setSinNumero(!evento.phone || evento.phone.trim() === '');
     
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -206,6 +174,37 @@ export default function AdminPage() {
     setEditingId(null);
     setSinNumero(false);
     setFormData({ title: '', venue: '', imageUrl: '', location: '', locality: 'San Miguel de Tucumán', date: '', musicType: 'Cuarteto', phone: '', description: '', rating: 5, mediaType: 'image' });
+  };
+
+  // --- LÓGICA DEL BUSCADOR DE FECHAS ---
+  // Extraemos todas las fechas únicas de los eventos cargados
+  const availableDates = useMemo(() => {
+    const dates = events.map(e => {
+      if (!e.date) return null;
+      return e.date.split('T')[0]; // Extraemos solo "YYYY-MM-DD"
+    }).filter(Boolean) as string[];
+    
+    const uniqueDates = Array.from(new Set(dates)).sort(); 
+    return ['Todas', ...uniqueDates];
+  }, [events]);
+
+  // Filtramos la tabla según la fecha seleccionada
+  const filteredTableEvents = useMemo(() => {
+    if (filterDate === 'Todas') return events;
+    return events.filter(event => event.date && event.date.startsWith(filterDate));
+  }, [events, filterDate]);
+
+  // Función para formatear bonito el desplegable del buscador
+  const formatShortDate = (dateStr: string) => {
+    if (dateStr === 'Todas') return 'Todas las fechas';
+    try {
+      const [year, month, day] = dateStr.split('-');
+      const fecha = new Date(Number(year), Number(month) - 1, Number(day));
+      const dias = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+      return `${dias[fecha.getDay()]} ${day}/${month}/${year}`;
+    } catch {
+      return dateStr;
+    }
   };
 
   if (loadingAuth) {
@@ -243,6 +242,7 @@ export default function AdminPage() {
           </button>
         </div>
 
+        {/* FORMULARIO DE CARGA */}
         <div className="bg-night-800 rounded-2xl p-6 sm:p-8 border border-night-700 shadow-xl mb-10">
           <h2 className="text-xl font-bold mb-6 text-brand-primary">
             {editingId ? 'Editando Evento Existente' : 'Cargar Nuevo Evento'}
@@ -330,7 +330,6 @@ export default function AdminPage() {
               </div>
             </div>
 
-            {/* SECCIÓN ACTUALIZADA: WhatsApp Inteligente */}
             <div className="bg-night-900/50 p-4 rounded-xl border border-night-700">
               <label htmlFor="phone" className={labelStyles}>WhatsApp (Para reservas)</label>
               <div className="flex flex-col gap-3 mt-2">
@@ -396,27 +395,65 @@ export default function AdminPage() {
           </form>
         </div>
 
+        {/* TABLA DE EVENTOS CON BUSCADOR DE FECHAS */}
         <div className="bg-night-800 rounded-2xl border border-night-700 shadow-xl overflow-hidden">
-          <div className="p-6 border-b border-night-700 bg-night-900/50">
-            <h2 className="text-xl font-bold">Eventos Publicados</h2>
+          
+          <div className="p-6 border-b border-night-700 bg-night-900/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <h2 className="text-xl font-bold flex items-center gap-2">
+              Eventos Publicados
+              <span className="bg-night-700 text-xs px-2 py-1 rounded-full text-brand-primary font-mono">
+                {filteredTableEvents.length}
+              </span>
+            </h2>
+
+            {/* FILTRO DE FECHAS */}
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <div className="relative flex-1 sm:w-64">
+                <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 w-4 h-4 pointer-events-none" />
+                <select 
+                  aria-label="Buscar eventos por fecha" 
+                  value={filterDate} 
+                  onChange={(e) => setFilterDate(e.target.value)} 
+                  className="w-full appearance-none bg-night-900 border border-night-600 rounded-lg pl-9 pr-8 py-2 text-sm text-gray-300 focus:outline-none focus:border-brand-primary cursor-pointer"
+                  style={{ colorScheme: 'dark' }}
+                >
+                  {availableDates.map(date => (
+                    <option key={date} value={date} className="bg-night-900 text-white">
+                      {formatShortDate(date)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              
+              {filterDate !== 'Todas' && (
+                <button 
+                  onClick={() => setFilterDate('Todas')} 
+                  title="Limpiar filtro de fecha"
+                  className="p-2 bg-night-900 hover:bg-red-500/10 text-gray-400 hover:text-red-400 border border-night-600 rounded-lg transition-colors"
+                >
+                  <FilterX size={18} />
+                </button>
+              )}
+            </div>
           </div>
+
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm text-gray-400">
               <thead className="bg-night-900 text-gray-300 uppercase font-semibold text-xs border-b border-night-700">
                 <tr>
                   <th className="px-6 py-4">Evento</th>
-                  <th className="px-6 py-4">Zona</th>
+                  <th className="px-6 py-4">Fecha</th>
                   <th className="px-6 py-4">Formato</th>
                   <th className="px-6 py-4 text-right">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-night-700">
-                {events.map((evt) => (
+                {filteredTableEvents.map((evt) => (
                   <tr key={evt.id} className="hover:bg-night-900/30 transition-colors">
                     <td className="px-6 py-4 font-medium text-white">{evt.title}</td>
-                    <td className="px-6 py-4">{evt.locality || '-'}</td>
+                    <td className="px-6 py-4">{evt.date ? formatShortDate(evt.date.split('T')[0]) : '-'}</td>
                     <td className="px-6 py-4">
-                      <span className="bg-night-900 text-gray-300 border border-night-700 px-2 py-1 rounded text-xs">
+                      <span className={`border px-2 py-1 rounded text-xs ${evt.mediaType === 'video' ? 'bg-purple-900/30 text-purple-400 border-purple-800' : 'bg-night-900 text-gray-300 border-night-700'}`}>
                         {evt.mediaType === 'video' ? 'Video' : 'Imagen'}
                       </span>
                     </td>
@@ -430,10 +467,10 @@ export default function AdminPage() {
                     </td>
                   </tr>
                 ))}
-                {events.length === 0 && (
+                {filteredTableEvents.length === 0 && (
                   <tr>
                     <td colSpan={4} className="px-6 py-8 text-center text-gray-500">
-                      No hay eventos publicados aún.
+                      {filterDate === 'Todas' ? 'No hay eventos publicados aún.' : 'No hay eventos publicados en esta fecha.'}
                     </td>
                   </tr>
                 )}

@@ -5,7 +5,6 @@ import { doc, getDoc, updateDoc, increment } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import Link from 'next/link';
 import { ArrowLeft, MapPin, Calendar, Music, Loader2, X, ZoomIn, PlayCircle, Heart, Building, Share2, Check, PhoneOff, MessageCircle } from 'lucide-react';
-// Importamos el componente animado
 import StarBorder from '@/components/StarBorder';
 
 interface EventData {
@@ -68,13 +67,12 @@ export default function EventDetail({ params }: { params: Promise<{ id: string }
           
           setEvent(eventDataCompleto);
           
-          setLikesCount(eventDataCompleto.likes !== undefined ? eventDataCompleto.likes : (eventDataCompleto.rating || 0));
+          // Fix matemático para asegurar que siempre cargue un número
+          setLikesCount(Number(eventDataCompleto.likes || 0));
           
           if (localStorage.getItem(`liked_${id}`)) {
             setHasLiked(true);
           }
-        } else {
-          console.log("No se encontró el evento");
         }
       } catch (error) {
         console.error("Error al obtener el evento:", error);
@@ -112,6 +110,7 @@ export default function EventDetail({ params }: { params: Promise<{ id: string }
   const handleShare = async () => {
     if (!event) return;
 
+    // Compartir nativo: Si es móvil abre WhatsApp/Instagram, si es PC copia link
     const shareData = {
       title: event.title,
       text: `¡Mirá esta joda en Tucumán! 🔥 ${event.title} en ${event.venue || event.location}`,
@@ -122,7 +121,7 @@ export default function EventDetail({ params }: { params: Promise<{ id: string }
       try {
         await navigator.share(shareData);
       } catch (err) {
-        console.log('Compartir cancelado o con error:', err);
+        console.log('Compartir cancelado');
       }
     } else {
       try {
@@ -137,7 +136,7 @@ export default function EventDetail({ params }: { params: Promise<{ id: string }
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-night-900 flex flex-col items-center justify-center text-brand-primary">
+      <div className="min-h-screen flex flex-col items-center justify-center text-brand-primary">
         <Loader2 className="animate-spin mb-4" size={48} />
         <p className="text-gray-400">Cargando detalles de la joda...</p>
       </div>
@@ -146,7 +145,7 @@ export default function EventDetail({ params }: { params: Promise<{ id: string }
 
   if (!event) {
     return (
-      <div className="min-h-screen bg-night-900 flex flex-col items-center justify-center text-white p-4">
+      <div className="min-h-screen flex flex-col items-center justify-center text-white p-4">
         <h2 className="text-2xl font-bold mb-4">Evento no encontrado</h2>
         <Link href="/" className="text-brand-primary hover:underline flex items-center gap-2 bg-night-800 px-6 py-3 rounded-xl border border-night-700">
           <ArrowLeft size={20} /> Volver a la cartelera
@@ -156,8 +155,6 @@ export default function EventDetail({ params }: { params: Promise<{ id: string }
   }
 
   const isVideo = event.mediaType === 'video';
-  
-  // LÓGICA INTELIGENTE DE WHATSAPP
   const hasPhone = event.phone && event.phone.trim() !== '';
   const cleanPhone = hasPhone ? event.phone.replace(/\D/g, '') : '';
   const whatsappMessage = `Hola! Vengo de Jodas Tucumanas. Quiero info del evento: *${event.title}*`;
@@ -165,18 +162,17 @@ export default function EventDetail({ params }: { params: Promise<{ id: string }
 
   return (
     <>
-      <main className="min-h-screen bg-night-900 text-white pb-20">
+      <main className="min-h-screen text-white pb-20">
         
-        {/* BOTÓN FLOTANTE: Volver a la cartelera */}
+        {/* BOTÓN FLOTANTE: Volver */}
         <Link 
           href="/" 
           className="absolute top-6 left-4 sm:left-8 z-50 bg-black/50 backdrop-blur-md p-3 rounded-full text-white hover:bg-brand-primary hover:scale-105 transition-all border border-white/10 shadow-lg"
-          title="Volver"
         >
           <ArrowLeft size={24} />
         </Link>
 
-        {/* 1. HEADER CON IMAGEN INMERSIVA */}
+        {/* 1. HEADER INMERSIVO */}
         <div 
           className="relative w-full h-80 sm:h-96 lg:h-[450px] cursor-pointer group" 
           onClick={() => setIsImageModalOpen(true)}
@@ -184,10 +180,7 @@ export default function EventDetail({ params }: { params: Promise<{ id: string }
           {isVideo ? (
             <video 
               src={event.imageUrl} 
-              autoPlay 
-              loop 
-              muted 
-              playsInline
+              autoPlay loop muted playsInline
               className="w-full h-full object-cover transition-opacity duration-300 group-hover:opacity-80 pointer-events-none"
             />
           ) : (
@@ -197,9 +190,7 @@ export default function EventDetail({ params }: { params: Promise<{ id: string }
               className="w-full h-full object-cover transition-opacity duration-300 group-hover:opacity-80"
             />
           )}
-          
           <div className="absolute inset-0 bg-gradient-to-t from-night-900 via-night-900/40 to-transparent"></div>
-          
           <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20">
             <div className="bg-black/60 backdrop-blur-sm p-4 rounded-full text-white scale-90 group-hover:scale-100 transition-transform">
               {isVideo ? <PlayCircle size={48} /> : <ZoomIn size={40} />}
@@ -207,17 +198,15 @@ export default function EventDetail({ params }: { params: Promise<{ id: string }
           </div>
         </div>
 
-        {/* 2. CONTENEDOR PRINCIPAL (Sube sobre la imagen) */}
+        {/* 2. CONTENEDOR PRINCIPAL */}
         <div className="max-w-3xl mx-auto px-4 sm:px-6 relative z-10 -mt-24 sm:-mt-32">
           
-          {/* Etiquetas flotantes y botones */}
           <div className="flex justify-between items-end mb-4">
             <div className="bg-brand-primary px-4 py-1.5 rounded-xl font-bold text-sm tracking-wider uppercase shadow-lg text-white flex items-center gap-2">
               <Music size={16} />
               {event.musicType}
             </div>
 
-            {/* Botonera de interacción rápida */}
             <div className="flex gap-3">
               <button 
                 onClick={handleShare}
@@ -241,22 +230,19 @@ export default function EventDetail({ params }: { params: Promise<{ id: string }
             </div>
           </div>
 
-          {/* Títulos */}
           <div className="mb-8">
             <h1 className="text-4xl sm:text-5xl font-extrabold text-white leading-tight mb-2 drop-shadow-lg">
               {event.title}
             </h1>
             {event.venue && (
-              <h2 className="text-xl sm:text-2xl text-brand-primary font-semibold drop-shadow-md flex items-center gap-2">
+              <h2 className="text-xl sm:text-2xl text-brand-primary font-semibold flex items-center gap-2">
                 <Building size={24} className="shrink-0" /> {event.venue}
               </h2>
             )}
           </div>
 
-          {/* 3. TARJETA DE INFORMACIÓN MODULAR */}
+          {/* 3. INFO MODULAR */}
           <div className="bg-night-800 border border-night-700 rounded-3xl p-2 mb-8 shadow-xl">
-            
-            {/* Fila Fecha */}
             <div className="flex items-center gap-4 p-4 hover:bg-night-700/50 rounded-2xl transition-colors">
               <div className="bg-night-900 p-3.5 rounded-xl text-brand-accent shadow-inner border border-night-700/50">
                 <Calendar size={24} />
@@ -266,10 +252,7 @@ export default function EventDetail({ params }: { params: Promise<{ id: string }
                 <p className="font-semibold text-white text-lg capitalize">{formatearFecha(event.date)}</p>
               </div>
             </div>
-
             <div className="h-px bg-night-700 mx-4"></div>
-
-            {/* Fila Ubicación */}
             <div className="flex items-center gap-4 p-4 hover:bg-night-700/50 rounded-2xl transition-colors">
               <div className="bg-night-900 p-3.5 rounded-xl text-green-400 shadow-inner border border-night-700/50">
                 <MapPin size={24} />
@@ -284,12 +267,12 @@ export default function EventDetail({ params }: { params: Promise<{ id: string }
             </div>
           </div>
 
-          {/* 4. LLAMADA A LA ACCIÓN ANIMADA (WhatsApp Inteligente con StarBorder) */}
+          {/* 4. WHATSAPP CON STARBORDER */}
           <div className="mb-10 w-full">
             {!hasPhone ? (
               <button
                 disabled
-                className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-night-800 text-gray-500 rounded-2xl cursor-not-allowed border border-night-700 shadow-inner"
+                className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-night-800 text-gray-500 rounded-2xl cursor-not-allowed border border-night-700"
               >
                 <PhoneOff size={24} />
                 <span className="text-lg font-bold tracking-wide">Sin número de contacto</span>
@@ -307,13 +290,13 @@ export default function EventDetail({ params }: { params: Promise<{ id: string }
               >
                 <div className="flex items-center justify-center gap-3 px-6 py-4 text-white">
                   <MessageCircle size={24} className="text-[#25D366]" />
-                  <span className="text-lg font-bold tracking-wide text-shadow-sm">Consultar Reservas</span>
+                  <span className="text-lg font-bold tracking-wide">Consultar Reservas</span>
                 </div>
               </StarBorder>
             )}
           </div>
 
-          {/* 5. ACERCA DEL EVENTO */}
+          {/* 5. DESCRIPCIÓN */}
           {event.description && (
             <div className="bg-night-800/50 border border-night-700 rounded-3xl p-6 sm:p-8 mb-8">
               <h3 className="text-xl font-bold mb-4 text-white">Acerca del evento</h3>
@@ -326,36 +309,24 @@ export default function EventDetail({ params }: { params: Promise<{ id: string }
         </div>
       </main>
 
-      {/* MODAL DE IMAGEN/VIDEO */}
+      {/* MODAL MODERNO */}
       {isImageModalOpen && (
         <div 
-          className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-md flex items-center justify-center p-4 sm:p-8 cursor-pointer animate-in fade-in duration-200"
+          className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-md flex items-center justify-center p-4 cursor-pointer animate-in fade-in duration-200"
           onClick={() => setIsImageModalOpen(false)}
         >
           <button 
-            aria-label="Cerrar vista completa"
-            title="Cerrar vista completa"
             onClick={() => setIsImageModalOpen(false)}
-            className="absolute top-4 right-4 sm:top-6 sm:right-6 bg-night-800/50 text-gray-300 hover:text-white hover:bg-night-700 p-3 rounded-full transition-all border border-night-700/50 backdrop-blur-md z-50"
+            aria-label="Cerrar imagen"
+            title="Cerrar imagen"
+            className="absolute top-4 right-4 bg-night-800/50 text-gray-300 p-3 rounded-full border border-night-700/50 backdrop-blur-md z-50"
           >
             <X size={24} />
           </button>
-          
           {isVideo ? (
-            <video 
-              src={event.imageUrl} 
-              controls 
-              autoPlay 
-              className="max-w-full max-h-[90vh] rounded-lg shadow-2xl"
-              onClick={(e) => e.stopPropagation()} 
-            />
+            <video src={event.imageUrl} controls autoPlay className="max-w-full max-h-[90vh] rounded-lg shadow-2xl" onClick={(e) => e.stopPropagation()} />
           ) : (
-            <img 
-              src={event.imageUrl} 
-              alt={`Flyer de ${event.title}`} 
-              className="max-w-full max-h-full object-contain rounded-lg shadow-2xl cursor-default"
-              onClick={(e) => e.stopPropagation()}
-            />
+            <img src={event.imageUrl} alt={event.title} className="max-w-full max-h-full object-contain rounded-lg shadow-2xl" onClick={(e) => e.stopPropagation()} />
           )}
         </div>
       )}

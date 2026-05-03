@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 import { Inter, Geist } from 'next/font/google';
 import './globals.css';
 import { cn } from "@/lib/utils";
+// 👇 Importamos el componente del fondo interactivo
+import BackgroundJoda from "@/components/BackgroundJoda";
 
 // Configuración de fuentes
 const geist = Geist({
@@ -24,13 +26,17 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="es" className={cn("font-sans", geist.variable)}>
+    <html lang="es" className={cn("font-sans dark", geist.variable)}>
       <body 
         className={cn(
           inter.className, 
-          "bg-night-900 text-white antialiased min-h-screen"
+          // Eliminamos bg-night-900 para que el fondo sea transparente y deje ver la magia
+          "text-white antialiased min-h-screen relative"
         )}
       >
+        {/* 👇 Inyectamos el fondo detrás de todo 👇 */}
+        <BackgroundJoda />
+
         {/* 
           Acá se inyecta directamente app/page.tsx o app/eventos/[id]/page.tsx 
           Sin header, sin nav, sin botón de admin. 100% limpio.

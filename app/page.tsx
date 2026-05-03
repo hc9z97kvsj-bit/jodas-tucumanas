@@ -1,12 +1,12 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import { collection, getDocs, orderBy, query } from 'firebase/firestore';
+import { collection, getDocs, orderBy, query, doc, setDoc, getDoc, increment } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import EventCard from '@/components/EventCard';
 import StarBorder from '@/components/StarBorder';
 import Link from 'next/link';
-import { Loader2, MapPin, Music, FilterX, Calendar, Flame } from 'lucide-react';
+import { Loader2, MapPin, Music, FilterX, Calendar, Flame, Eye } from 'lucide-react';
 
 interface EventData {
   id: string;
@@ -25,11 +25,13 @@ interface EventData {
 export default function Home() {
   const [events, setEvents] = useState<EventData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [visitCount, setVisitCount] = useState<number>(0);
 
   const [selectedZone, setSelectedZone] = useState('Todas');
   const [selectedGenre, setSelectedGenre] = useState('Todos');
   const [selectedDate, setSelectedDate] = useState('Todas');
 
+  // EFECTO PARA CARGAR EVENTOS
   useEffect(() => {
     const fetchEvents = async () => {
       try {
@@ -60,6 +62,30 @@ export default function Home() {
     };
 
     fetchEvents();
+  }, []);
+
+  // EFECTO PARA EL CONTADOR DE VISITAS
+  useEffect(() => {
+    const registrarVisita = async () => {
+      const statsRef = doc(db, 'estadisticas', 'visitas_globales');
+      const hasVisited = sessionStorage.getItem('jodas_tucumanas_visited');
+
+      try {
+        if (!hasVisited) {
+          await setDoc(statsRef, { count: increment(1) }, { merge: true });
+          sessionStorage.setItem('jodas_tucumanas_visited', 'true');
+        }
+
+        const docSnap = await getDoc(statsRef);
+        if (docSnap.exists()) {
+          setVisitCount(docSnap.data().count);
+        }
+      } catch (error) {
+        console.error("Error con el contador de visitas:", error);
+      }
+    };
+
+    registrarVisita();
   }, []);
 
   const topEventos = useMemo(() => {
@@ -120,18 +146,31 @@ export default function Home() {
   const selectStyles = "w-full appearance-none bg-night-900 border border-night-700 rounded-xl pl-10 pr-4 py-3 text-white focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary transition-colors cursor-pointer shadow-sm";
 
   return (
-    <main className="min-h-screen bg-night-900 text-white p-4 sm:p-8">
+    <main className="min-h-screen text-white p-4 sm:p-8">
       
-      <div className="max-w-7xl mx-auto mb-10 text-center mt-6 flex flex-col items-center">
-        <img 
-          src="/logo.png" 
-          alt="Jodas Tucumanas Logo" 
-          className="h-28 sm:h-36 object-contain mb-6 drop-shadow-[0_0_15px_rgba(255,255,255,0.1)] hover:scale-105 transition-transform duration-300"
-        />
-        <h1 className="text-4xl md:text-5xl font-bold mb-4 tracking-tight">
-          Descubrí la noche en <span className="text-brand-primary">Tucumán</span>
+      {/* 👇 NUEVA CABECERA MÁS PREMIUM 👇 */}
+      <div className="max-w-4xl mx-auto mb-16 text-center mt-8 sm:mt-12 flex flex-col items-center relative z-10">
+        
+        {/* LOGO MÁS GRANDE CON RESPLANDOR */}
+        <div className="relative mb-8">
+          <div className="absolute inset-0 bg-brand-primary/20 blur-3xl rounded-full pointer-events-none"></div>
+          <img 
+            src="/logo.png" 
+            alt="Jodas Tucumanas Logo" 
+            className="relative h-40 sm:h-48 md:h-56 object-contain drop-shadow-[0_10px_25px_rgba(0,0,0,0.8)] hover:scale-105 transition-transform duration-500 ease-out"
+          />
+        </div>
+
+        {/* TÍTULO CON DEGRADADO Y GLOW */}
+        <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold mb-6 tracking-tight text-white drop-shadow-lg leading-tight">
+          Descubrí la noche en <br className="sm:hidden" />
+          <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 via-brand-primary to-orange-600 drop-shadow-[0_0_15px_rgba(249,115,22,0.5)]">
+            Tucumán
+          </span>
         </h1>
-        <p className="text-gray-400 text-lg max-w-2xl mx-auto mb-8">
+
+        {/* TEXTO SECUNDARIO MÁS LEGIBLE */}
+        <p className="text-gray-300 text-lg sm:text-xl max-w-2xl mx-auto mb-8 font-medium leading-relaxed drop-shadow-md">
           Encontrá los mejores bailes, recitales y fiestas. Filtrá por zona, género o fecha y armá tu salida perfecta.
         </p>
       </div>
@@ -202,7 +241,7 @@ export default function Home() {
           <div className="flex flex-col md:flex-row flex-wrap xl:flex-nowrap gap-4 w-full flex-1">
             <div className="relative w-full md:flex-1">
               <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-primary w-5 h-5 pointer-events-none" />
-              <select value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className={`${selectStyles} [color-scheme:dark]`}>
+              <select aria-label="Filtrar por fecha" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className={`${selectStyles} [color-scheme:dark]`}>
                 {availableDates.map(date => (
                   <option key={date} value={date} className="bg-night-900 text-white">{formatShortDate(date)}</option>
                 ))}
@@ -210,7 +249,7 @@ export default function Home() {
             </div>
             <div className="relative w-full md:flex-1">
               <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-primary w-5 h-5 pointer-events-none" />
-              <select value={selectedZone} onChange={(e) => setSelectedZone(e.target.value)} className={`${selectStyles} [color-scheme:dark]`}>
+              <select aria-label="Filtrar por zona" value={selectedZone} onChange={(e) => setSelectedZone(e.target.value)} className={`${selectStyles} [color-scheme:dark]`}>
                 {availableZones.map(zone => (
                   <option key={zone} value={zone} className="bg-night-900 text-white">{zone === 'Todas' ? 'Todas las zonas' : zone}</option>
                 ))}
@@ -218,7 +257,7 @@ export default function Home() {
             </div>
             <div className="relative w-full md:flex-1">
               <Music className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-primary w-5 h-5 pointer-events-none" />
-              <select value={selectedGenre} onChange={(e) => setSelectedGenre(e.target.value)} className={`${selectStyles} [color-scheme:dark]`}>
+              <select aria-label="Filtrar por género" value={selectedGenre} onChange={(e) => setSelectedGenre(e.target.value)} className={`${selectStyles} [color-scheme:dark]`}>
                 {availableGenres.map(genre => (
                   <option key={genre} value={genre} className="bg-night-900 text-white">{genre === 'Todos' ? 'Todos los géneros' : genre}</option>
                 ))}
@@ -264,9 +303,18 @@ export default function Home() {
         )}
       </div>
 
-      {/* FOOTER */}
+      {/* FOOTER CON CONTADOR */}
       <footer className="max-w-7xl mx-auto mt-20 pt-8 border-t border-night-700 flex flex-col md:flex-row items-center justify-between gap-4 text-gray-500 text-sm">
-        <p>© {new Date().getFullYear()} Jodas Tucumanas. Todos los derechos reservados.</p>
+        <div className="flex flex-col sm:flex-row items-center gap-4">
+          <p>© {new Date().getFullYear()} Jodas Tucumanas. Todos los derechos reservados.</p>
+          {/* El badge del contador */}
+          {visitCount > 0 && (
+            <div className="flex items-center gap-2 bg-night-800 px-3 py-1.5 rounded-full border border-night-700 text-brand-primary shadow-sm">
+              <Eye size={16} />
+              <span className="font-semibold text-white tracking-wide">{visitCount} visitas</span>
+            </div>
+          )}
+        </div>
         <div className="flex items-center gap-6">
           <Link href="/terminos" className="hover:text-brand-primary transition-colors">Términos y Condiciones</Link>
           <a href="#" className="hover:text-brand-primary transition-colors">Contacto</a>
