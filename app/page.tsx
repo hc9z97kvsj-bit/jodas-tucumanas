@@ -31,7 +31,6 @@ export default function Home() {
   const [selectedGenre, setSelectedGenre] = useState('Todos');
   const [selectedDate, setSelectedDate] = useState('Todas');
 
-  // EFECTO PARA CARGAR EVENTOS
   useEffect(() => {
     const fetchEvents = async () => {
       try {
@@ -64,7 +63,6 @@ export default function Home() {
     fetchEvents();
   }, []);
 
-  // EFECTO PARA EL CONTADOR DE VISITAS
   useEffect(() => {
     const registrarVisita = async () => {
       const statsRef = doc(db, 'estadisticas', 'visitas_globales');
@@ -148,12 +146,10 @@ export default function Home() {
   return (
     <main className="min-h-screen text-white p-4 sm:p-8">
       
-      {/* 👇 NUEVA CABECERA MÁS PREMIUM 👇 */}
       <div className="max-w-4xl mx-auto mb-16 text-center mt-8 sm:mt-12 flex flex-col items-center relative z-10">
         
-        {/* LOGO MÁS GRANDE CON RESPLANDOR */}
         <div className="relative mb-8">
-          <div className="absolute inset-0 bg-brand-primary/20 blur-3xl rounded-full pointer-events-none"></div>
+          <div className="absolute inset-0 bg-brand-primary/25 blur-3xl rounded-full pointer-events-none"></div>
           <img 
             src="/logo.png" 
             alt="Jodas Tucumanas Logo" 
@@ -161,15 +157,13 @@ export default function Home() {
           />
         </div>
 
-        {/* TÍTULO CON DEGRADADO Y GLOW */}
         <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold mb-6 tracking-tight text-white drop-shadow-lg leading-tight">
           Descubrí la noche en <br className="sm:hidden" />
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 via-brand-primary to-orange-600 drop-shadow-[0_0_15px_rgba(249,115,22,0.5)]">
+          <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#D751F5] via-[#DE3EB1] to-[#FF0A23] drop-shadow-[0_0_20px_rgba(215,81,245,0.6)]">
             Tucumán
           </span>
         </h1>
 
-        {/* TEXTO SECUNDARIO MÁS LEGIBLE */}
         <p className="text-gray-300 text-lg sm:text-xl max-w-2xl mx-auto mb-8 font-medium leading-relaxed drop-shadow-md">
           Encontrá los mejores bailes, recitales y fiestas. Filtrá por zona, género o fecha y armá tu salida perfecta.
         </p>
@@ -177,14 +171,13 @@ export default function Home() {
 
       <div className="max-w-7xl mx-auto">
         
-        {/* SECCIÓN RANKING "ALTA JODA" */}
         {topEventos.length > 0 && !loading && selectedZone === 'Todas' && selectedGenre === 'Todos' && selectedDate === 'Todas' && (
           <div className="mb-12">
             <div className="flex items-center gap-3 mb-6">
-              <div className="bg-gradient-to-r from-orange-500 to-red-500 p-2 rounded-xl text-white shadow-lg shadow-orange-500/20 animate-pulse">
+              <div className="bg-gradient-to-r from-[#D751F5] to-[#FF0A23] p-2 rounded-xl text-white shadow-lg shadow-[#D751F5]/20 animate-pulse">
                 <Flame size={28} />
               </div>
-              <h2 className="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-red-500">
+              <h2 className="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-[#D751F5] to-[#FF0A23]">
                 Alta Joda de la Semana
               </h2>
             </div>
@@ -201,13 +194,14 @@ export default function Home() {
                   </div>
                   
                   {index === 0 ? (
-                    <StarBorder as="div" color="#f97316" speed="4s" thickness={3} className="h-full w-full">
+                    <StarBorder as="div" color="#D751F5" speed="4s" thickness={3} className="h-full w-full">
                       <EventCard 
                         id={evento.id}
                         title={evento.title}
                         venue={evento.venue}
                         imageUrl={evento.imageUrl}
                         location={evento.location}
+                        locality={evento.locality}
                         date={evento.date}
                         musicType={evento.musicType}
                         likes={evento.likes}
@@ -222,6 +216,7 @@ export default function Home() {
                         venue={evento.venue}
                         imageUrl={evento.imageUrl}
                         location={evento.location}
+                        locality={evento.locality}
                         date={evento.date}
                         musicType={evento.musicType}
                         likes={evento.likes}
@@ -236,7 +231,6 @@ export default function Home() {
           </div>
         )}
 
-        {/* BARRA DE FILTROS */}
         <div className="bg-night-800 p-4 sm:p-5 rounded-2xl border border-night-700 shadow-xl mb-10 flex flex-col lg:flex-row gap-4 items-center justify-between">
           <div className="flex flex-col md:flex-row flex-wrap xl:flex-nowrap gap-4 w-full flex-1">
             <div className="relative w-full md:flex-1">
@@ -271,13 +265,11 @@ export default function Home() {
           )}
         </div>
 
-        {/* Resultados Generales */}
         <div className="mb-6 flex items-end justify-between">
           <h2 className="text-2xl font-bold text-white border-b-2 border-brand-primary pb-2 inline-block">Cartelera General</h2>
           <span className="text-gray-400 text-sm font-medium">{filteredEvents.length} {filteredEvents.length === 1 ? 'evento' : 'eventos'}</span>
         </div>
 
-        {/* GRILLA DE EVENTOS */}
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 text-brand-primary">
             <Loader2 className="animate-spin mb-4" size={48} />
@@ -303,11 +295,9 @@ export default function Home() {
         )}
       </div>
 
-      {/* FOOTER CON CONTADOR */}
       <footer className="max-w-7xl mx-auto mt-20 pt-8 border-t border-night-700 flex flex-col md:flex-row items-center justify-between gap-4 text-gray-500 text-sm">
         <div className="flex flex-col sm:flex-row items-center gap-4">
           <p>© {new Date().getFullYear()} Jodas Tucumanas. Todos los derechos reservados.</p>
-          {/* El badge del contador */}
           {visitCount > 0 && (
             <div className="flex items-center gap-2 bg-night-800 px-3 py-1.5 rounded-full border border-night-700 text-brand-primary shadow-sm">
               <Eye size={16} />

@@ -5,9 +5,8 @@ import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy 
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { db, auth } from '@/lib/firebase';
 import { useRouter } from 'next/navigation';
-import { CalendarPlus, Save, CheckCircle, Loader2, Edit, Trash2, LogOut, Calendar, FilterX } from 'lucide-react';
+import { CalendarPlus, Save, CheckCircle, Loader2, Edit, Trash2, LogOut, Calendar, FilterX, Copy, Search } from 'lucide-react';
 
-// Listado hiper completo de localidades y comunas de Tucumán
 const localidadesTucuman = [
   "Aguilares", "Alderetes", "Acheral", "Amaicha del Valle", "Banda del Río Salí",
   "Bella Vista", "Burruyacú", "Colalao del Valle", "Cruz Alta", "Concepción",
@@ -45,9 +44,9 @@ export default function AdminPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const [sinNumero, setSinNumero] = useState(false);
-
-  // NUEVO: Estado para el filtro de fechas en la tabla
+  
   const [filterDate, setFilterDate] = useState('Todas');
+  const [searchTerm, setSearchTerm] = useState(''); 
 
   const [formData, setFormData] = useState({
     title: '',
@@ -90,9 +89,19 @@ export default function AdminPage() {
     }
   };
 
+  // 👇 ACÁ ESTÁ LA MAGIA PARA LIMPIAR EL LINK 👇
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    
+    let cleanValue = value;
+
+    // Si el usuario está pegando algo en el campo imageUrl, le borramos los corchetes
+    if (name === 'imageUrl') {
+      // Reemplaza [img], [/img], [IMG], [/IMG] por nada (texto vacío) y borra espacios al inicio/final
+      cleanValue = value.replace(/\[\/?img\]/gi, '').trim();
+    }
+
+    setFormData(prev => ({ ...prev, [name]: cleanValue }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -148,9 +157,26 @@ export default function AdminPage() {
       mediaType: evento.mediaType || 'image'
     });
     setEditingId(evento.id);
-    
     setSinNumero(!evento.phone || evento.phone.trim() === '');
-    
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleDuplicate = (evento: EventData) => {
+    setFormData({
+      title: evento.title || '',
+      venue: evento.venue || '',
+      imageUrl: evento.imageUrl || '',
+      location: evento.location || '',
+      locality: evento.locality || 'San Miguel de Tucumán',
+      date: evento.date || '',
+      musicType: evento.musicType || 'Cuarteto',
+      phone: evento.phone || '',
+      description: evento.description || '',
+      rating: evento.rating || 5,
+      mediaType: evento.mediaType || 'image'
+    });
+    setEditingId(null); 
+    setSinNumero(!evento.phone || evento.phone.trim() === '');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -176,25 +202,30 @@ export default function AdminPage() {
     setFormData({ title: '', venue: '', imageUrl: '', location: '', locality: 'San Miguel de Tucumán', date: '', musicType: 'Cuarteto', phone: '', description: '', rating: 5, mediaType: 'image' });
   };
 
-  // --- LÓGICA DEL BUSCADOR DE FECHAS ---
-  // Extraemos todas las fechas únicas de los eventos cargados
   const availableDates = useMemo(() => {
     const dates = events.map(e => {
       if (!e.date) return null;
-      return e.date.split('T')[0]; // Extraemos solo "YYYY-MM-DD"
+      return e.date.split('T')[0]; 
     }).filter(Boolean) as string[];
     
     const uniqueDates = Array.from(new Set(dates)).sort(); 
     return ['Todas', ...uniqueDates];
   }, [events]);
 
-  // Filtramos la tabla según la fecha seleccionada
   const filteredTableEvents = useMemo(() => {
-    if (filterDate === 'Todas') return events;
-    return events.filter(event => event.date && event.date.startsWith(filterDate));
-  }, [events, filterDate]);
+    return events.filter(event => {
+      const matchDate = filterDate === 'Todas' || (event.date && event.date.startsWith(filterDate));
+      
+      const term = searchTerm.toLowerCase();
+      const matchSearch = 
+        (event.title && event.title.toLowerCase().includes(term)) ||
+        (event.venue && event.venue.toLowerCase().includes(term)) ||
+        (event.locality && event.locality.toLowerCase().includes(term));
+        
+      return matchDate && matchSearch;
+    });
+  }, [events, filterDate, searchTerm]);
 
-  // Función para formatear bonito el desplegable del buscador
   const formatShortDate = (dateStr: string) => {
     if (dateStr === 'Todas') return 'Todas las fechas';
     try {
@@ -326,7 +357,8 @@ export default function AdminPage() {
               </div>
               <div>
                 <label htmlFor="imageUrl" className={labelStyles}>Enlace del Archivo (URL)</label>
-                <input id="imageUrl" required type="url" name="imageUrl" value={formData.imageUrl} onChange={handleChange} placeholder="https://..." className={inputStyles} />
+                {/* Al pegar acá, la función handleChange limpia automáticamente los corchetes */}
+                <input id="imageUrl" required type="url" name="imageUrl" value={formData.imageUrl} onChange={handleChange} placeholder="https://i.imgur.com/..." className={inputStyles} />
               </div>
             </div>
 
@@ -395,45 +427,60 @@ export default function AdminPage() {
           </form>
         </div>
 
-        {/* TABLA DE EVENTOS CON BUSCADOR DE FECHAS */}
+        {/* TABLA DE EVENTOS CON BUSCADORES */}
         <div className="bg-night-800 rounded-2xl border border-night-700 shadow-xl overflow-hidden">
           
-          <div className="p-6 border-b border-night-700 bg-night-900/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <h2 className="text-xl font-bold flex items-center gap-2">
+          <div className="p-6 border-b border-night-700 bg-night-900/50 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <h2 className="text-xl font-bold flex items-center gap-2 whitespace-nowrap">
               Eventos Publicados
               <span className="bg-night-700 text-xs px-2 py-1 rounded-full text-brand-primary font-mono">
                 {filteredTableEvents.length}
               </span>
             </h2>
 
-            {/* FILTRO DE FECHAS */}
-            <div className="flex items-center gap-2 w-full sm:w-auto">
-              <div className="relative flex-1 sm:w-64">
-                <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 w-4 h-4 pointer-events-none" />
-                <select 
-                  aria-label="Buscar eventos por fecha" 
-                  value={filterDate} 
-                  onChange={(e) => setFilterDate(e.target.value)} 
-                  className="w-full appearance-none bg-night-900 border border-night-600 rounded-lg pl-9 pr-8 py-2 text-sm text-gray-300 focus:outline-none focus:border-brand-primary cursor-pointer"
-                  style={{ colorScheme: 'dark' }}
-                >
-                  {availableDates.map(date => (
-                    <option key={date} value={date} className="bg-night-900 text-white">
-                      {formatShortDate(date)}
-                    </option>
-                  ))}
-                </select>
-              </div>
+            {/* CONTENEDOR DE FILTROS: Texto + Fecha */}
+            <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
               
-              {filterDate !== 'Todas' && (
-                <button 
-                  onClick={() => setFilterDate('Todas')} 
-                  title="Limpiar filtro de fecha"
-                  className="p-2 bg-night-900 hover:bg-red-500/10 text-gray-400 hover:text-red-400 border border-night-600 rounded-lg transition-colors"
-                >
-                  <FilterX size={18} />
-                </button>
-              )}
+              <div className="relative w-full sm:w-64">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 w-4 h-4 pointer-events-none" />
+                <input 
+                  type="text" 
+                  placeholder="Buscar joda, lugar..." 
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full bg-night-900 border border-night-600 rounded-lg pl-9 pr-4 py-2 text-sm text-gray-300 focus:outline-none focus:border-brand-primary transition-colors"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <div className="relative flex-1 sm:w-48">
+                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 w-4 h-4 pointer-events-none" />
+                  <select 
+                    aria-label="Buscar eventos por fecha" 
+                    value={filterDate} 
+                    onChange={(e) => setFilterDate(e.target.value)} 
+                    className="w-full appearance-none bg-night-900 border border-night-600 rounded-lg pl-9 pr-8 py-2 text-sm text-gray-300 focus:outline-none focus:border-brand-primary cursor-pointer"
+                    style={{ colorScheme: 'dark' }}
+                  >
+                    {availableDates.map(date => (
+                      <option key={date} value={date} className="bg-night-900 text-white">
+                        {formatShortDate(date)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                
+                {(filterDate !== 'Todas' || searchTerm !== '') && (
+                  <button 
+                    onClick={() => { setFilterDate('Todas'); setSearchTerm(''); }} 
+                    title="Limpiar filtros"
+                    className="p-2 bg-night-900 hover:bg-red-500/10 text-gray-400 hover:text-red-400 border border-night-600 rounded-lg transition-colors shrink-0"
+                  >
+                    <FilterX size={18} />
+                  </button>
+                )}
+              </div>
+
             </div>
           </div>
 
@@ -443,21 +490,27 @@ export default function AdminPage() {
                 <tr>
                   <th className="px-6 py-4">Evento</th>
                   <th className="px-6 py-4">Fecha</th>
-                  <th className="px-6 py-4">Formato</th>
+                  <th className="px-6 py-4 hidden sm:table-cell">Formato</th>
                   <th className="px-6 py-4 text-right">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-night-700">
                 {filteredTableEvents.map((evt) => (
                   <tr key={evt.id} className="hover:bg-night-900/30 transition-colors">
-                    <td className="px-6 py-4 font-medium text-white">{evt.title}</td>
-                    <td className="px-6 py-4">{evt.date ? formatShortDate(evt.date.split('T')[0]) : '-'}</td>
                     <td className="px-6 py-4">
+                      <div className="font-medium text-white">{evt.title}</div>
+                      <div className="text-xs text-brand-primary mt-0.5">{evt.venue || evt.locality}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">{evt.date ? formatShortDate(evt.date.split('T')[0]) : '-'}</td>
+                    <td className="px-6 py-4 hidden sm:table-cell">
                       <span className={`border px-2 py-1 rounded text-xs ${evt.mediaType === 'video' ? 'bg-purple-900/30 text-purple-400 border-purple-800' : 'bg-night-900 text-gray-300 border-night-700'}`}>
                         {evt.mediaType === 'video' ? 'Video' : 'Imagen'}
                       </span>
                     </td>
-                    <td className="px-6 py-4 flex justify-end gap-3">
+                    <td className="px-6 py-4 flex justify-end gap-1 sm:gap-3">
+                      <button onClick={() => handleDuplicate(evt)} className="p-2 text-green-400 hover:bg-green-400/10 rounded-lg transition-colors" title="Copiar datos para evento nuevo">
+                        <Copy size={18} />
+                      </button>
                       <button onClick={() => handleEdit(evt)} className="p-2 text-blue-400 hover:bg-blue-400/10 rounded-lg transition-colors" title="Editar">
                         <Edit size={18} />
                       </button>
@@ -470,7 +523,7 @@ export default function AdminPage() {
                 {filteredTableEvents.length === 0 && (
                   <tr>
                     <td colSpan={4} className="px-6 py-8 text-center text-gray-500">
-                      {filterDate === 'Todas' ? 'No hay eventos publicados aún.' : 'No hay eventos publicados en esta fecha.'}
+                      No encontramos eventos con esos filtros.
                     </td>
                   </tr>
                 )}

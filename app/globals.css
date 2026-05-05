@@ -4,15 +4,16 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* 🌟 TUS COLORES Y ANIMACIONES PARA TAILWIND V4 🌟 */
+/* 🌟 TU NUEVA PALETA NEÓN / BOLICHE 🌟 */
 @theme {
-  /* Paleta de colores */
-  --color-night-700: #334155;
-  --color-night-800: #1e293b;
-  --color-night-900: #0f172a;
+  /* Fondos Morados (Paleta 1) */
+  --color-night-700: #6241D9; /* Bordes y hovers */
+  --color-night-800: #52188C; /* Fondo de tarjetas */
+  --color-night-900: #351159; /* Fondo principal re oscuro */
   
-  --color-brand-primary: #f97316;
-  --color-brand-accent: #fbbf24;
+  /* Colores de Acento Vibrantes (Paleta 2) */
+  --color-brand-primary: #D751F5; /* Fucsia Neón (Acento principal) */
+  --color-brand-accent: #FF0A23;  /* Rojo Neón (Fuegos, alertas) */
 
   /* Animaciones del StarBorder */
   --animate-star-movement-bottom: star-movement-bottom linear infinite alternate;
@@ -39,7 +40,6 @@
     100% { transform: translate(0px, 0px) scale(1); }
   }
 
-  /* El steps(2) hace que el movimiento sea robótico, creando el efecto Glitch */
   @keyframes glitch-noise {
     0% { transform: translate(0, 0); }
     20% { transform: translate(-1%, 1%); }
@@ -50,7 +50,7 @@
   }
 }
 
-/* Configuraciones de Shadcn (dejamos esto intacto por si usas más componentes) */
+/* Configuraciones de Shadcn intactas */
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -114,20 +114,7 @@
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
 }
 
 .dark {
@@ -149,31 +136,12 @@
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
-  
-  /* ESTO ES LO QUE TE PONÍA TODO BLANCO, LO COMENTAMOS */
-  /* body {
-    @apply bg-background text-foreground;
-  } */
-  
   html {
     @apply font-sans;
   }

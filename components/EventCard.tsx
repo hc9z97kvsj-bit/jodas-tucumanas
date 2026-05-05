@@ -204,7 +204,8 @@ export default function EventCard({
                 </button>
               </div>
 
-              <div className="flex items-center text-brand-primary font-bold text-sm uppercase tracking-wider gap-1 opacity-80 sm:opacity-0 group-hover:opacity-100 transition-all duration-300 translate-x-2 group-hover:translate-x-0">
+{/* Llamado a la acción (Siempre visible en celular, Hover en PC) */}
+              <div className="flex items-center text-brand-primary font-bold text-sm uppercase tracking-wider gap-1 opacity-100 sm:opacity-0 sm:translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300">
                 <span>Ver Info</span>
                 <ArrowRight size={16} className="animate-pulse" />
               </div>
