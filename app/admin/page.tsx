@@ -14,7 +14,7 @@ const localidadesTucuman = [
   "Graneros", "Juan Bautista Alberdi", "La Cocha", "La Florida", "Las Talitas",
   "Leales", "Lastenia", "Los Ralos", "Lules", "Monteros", "Raco", "Ranchillos",
   "Río Seco", "San Andrés", "San Javier", "San Miguel de Tucumán", "San Pablo",
-  "San Pedro de Colalao", "Santa Ana", "Simoca", "Tafí del Valle", "Tafí Viejo",
+  "San Pedro de Colalao", "Santa Ana", "Simoca", "Tafí del Valle", "Tafí Viejo","Taruca Pampa",
   "Trancas", "Villa Carmela", "Villa Quinteros", "Yerba Buena", "Interior / Otra"
 ];
 
@@ -31,6 +31,10 @@ interface EventData {
   description: string;
   rating: number;
   mediaType: string; 
+  // 👇 NUEVOS CAMPOS OPCIONALES 👇
+  ticketLink?: string;
+  instagram?: string;
+  facebook?: string;
 }
 
 export default function AdminPage() {
@@ -59,7 +63,11 @@ export default function AdminPage() {
     phone: '',
     description: '',
     rating: 5,
-    mediaType: 'image'
+    mediaType: 'image',
+    // 👇 INICIALIZAMOS LOS NUEVOS CAMPOS 👇
+    ticketLink: '',
+    instagram: '',
+    facebook: ''
   });
 
   useEffect(() => {
@@ -89,15 +97,12 @@ export default function AdminPage() {
     }
   };
 
-  // 👇 ACÁ ESTÁ LA MAGIA PARA LIMPIAR EL LINK 👇
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     
     let cleanValue = value;
 
-    // Si el usuario está pegando algo en el campo imageUrl, le borramos los corchetes
     if (name === 'imageUrl') {
-      // Reemplaza [img], [/img], [IMG], [/IMG] por nada (texto vacío) y borra espacios al inicio/final
       cleanValue = value.replace(/\[\/?img\]/gi, '').trim();
     }
 
@@ -127,7 +132,8 @@ export default function AdminPage() {
       }
 
       setFormData({
-        title: '', venue: '', imageUrl: '', location: '', locality: 'San Miguel de Tucumán', date: '', musicType: 'Cuarteto', phone: '', description: '', rating: 5, mediaType: 'image'
+        title: '', venue: '', imageUrl: '', location: '', locality: 'San Miguel de Tucumán', date: '', musicType: 'Cuarteto', phone: '', description: '', rating: 5, mediaType: 'image',
+        ticketLink: '', instagram: '', facebook: ''
       });
       setSinNumero(false);
       setEditingId(null);
@@ -154,7 +160,11 @@ export default function AdminPage() {
       phone: evento.phone || '',
       description: evento.description || '',
       rating: evento.rating || 5,
-      mediaType: evento.mediaType || 'image'
+      mediaType: evento.mediaType || 'image',
+      // 👇 CARGAMOS LOS DATOS AL EDITAR 👇
+      ticketLink: evento.ticketLink || '',
+      instagram: evento.instagram || '',
+      facebook: evento.facebook || ''
     });
     setEditingId(evento.id);
     setSinNumero(!evento.phone || evento.phone.trim() === '');
@@ -173,7 +183,11 @@ export default function AdminPage() {
       phone: evento.phone || '',
       description: evento.description || '',
       rating: evento.rating || 5,
-      mediaType: evento.mediaType || 'image'
+      mediaType: evento.mediaType || 'image',
+      // 👇 COPIAMOS LOS LINKS TAMBIÉN 👇
+      ticketLink: evento.ticketLink || '',
+      instagram: evento.instagram || '',
+      facebook: evento.facebook || ''
     });
     setEditingId(null); 
     setSinNumero(!evento.phone || evento.phone.trim() === '');
@@ -199,7 +213,10 @@ export default function AdminPage() {
   const resetForm = () => {
     setEditingId(null);
     setSinNumero(false);
-    setFormData({ title: '', venue: '', imageUrl: '', location: '', locality: 'San Miguel de Tucumán', date: '', musicType: 'Cuarteto', phone: '', description: '', rating: 5, mediaType: 'image' });
+    setFormData({ 
+      title: '', venue: '', imageUrl: '', location: '', locality: 'San Miguel de Tucumán', date: '', musicType: 'Cuarteto', phone: '', description: '', rating: 5, mediaType: 'image',
+      ticketLink: '', instagram: '', facebook: '' 
+    });
   };
 
   const availableDates = useMemo(() => {
@@ -357,8 +374,26 @@ export default function AdminPage() {
               </div>
               <div>
                 <label htmlFor="imageUrl" className={labelStyles}>Enlace del Archivo (URL)</label>
-                {/* Al pegar acá, la función handleChange limpia automáticamente los corchetes */}
                 <input id="imageUrl" required type="url" name="imageUrl" value={formData.imageUrl} onChange={handleChange} placeholder="https://i.imgur.com/..." className={inputStyles} />
+              </div>
+            </div>
+
+            {/* 👇 SECCIÓN NUEVA: ENLACES EXTERNOS 👇 */}
+            <div className="bg-night-900/50 p-4 rounded-xl border border-night-700 space-y-4">
+              <h3 className="text-sm font-bold text-brand-primary uppercase tracking-wider">Enlaces Externos (Opcional)</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label htmlFor="ticketLink" className={labelStyles}>Entradas (Passline, etc)</label>
+                  <input id="ticketLink" type="url" name="ticketLink" value={formData.ticketLink} onChange={handleChange} placeholder="https://..." className={inputStyles} />
+                </div>
+                <div>
+                  <label htmlFor="instagram" className={labelStyles}>Instagram (Link al perfil)</label>
+                  <input id="instagram" type="url" name="instagram" value={formData.instagram} onChange={handleChange} placeholder="https://instagram.com/..." className={inputStyles} />
+                </div>
+                <div>
+                  <label htmlFor="facebook" className={labelStyles}>Facebook (Link al perfil)</label>
+                  <input id="facebook" type="url" name="facebook" value={formData.facebook} onChange={handleChange} placeholder="https://facebook.com/..." className={inputStyles} />
+                </div>
               </div>
             </div>
 

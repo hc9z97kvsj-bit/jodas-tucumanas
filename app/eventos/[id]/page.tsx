@@ -4,7 +4,8 @@ import { useEffect, useState, use } from 'react';
 import { doc, getDoc, updateDoc, increment } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import Link from 'next/link';
-import { ArrowLeft, MapPin, Calendar, Music, Loader2, X, ZoomIn, PlayCircle, Heart, Building, Share2, Check, PhoneOff, MessageCircle } from 'lucide-react';
+// 👇 Usamos Camera y Globe en vez de Instagram y Facebook para evitar el error de versión
+import { ArrowLeft, MapPin, Calendar, Music, Loader2, X, ZoomIn, PlayCircle, Heart, Building, Share2, Check, PhoneOff, MessageCircle, Ticket, Camera, Globe } from 'lucide-react';
 import StarBorder from '@/components/StarBorder';
 
 interface EventData {
@@ -21,6 +22,9 @@ interface EventData {
   rating?: number;
   likes?: number;
   mediaType?: string;
+  ticketLink?: string;
+  instagram?: string;
+  facebook?: string;
 }
 
 function formatearFecha(fechaStr: string) {
@@ -110,7 +114,6 @@ export default function EventDetail({ params }: { params: Promise<{ id: string }
   const handleShare = async () => {
     if (!event) return;
 
-    // Compartir nativo: Si es móvil abre WhatsApp/Instagram, si es PC copia link
     const shareData = {
       title: event.title,
       text: `¡Mirá esta joda en Tucumán! 🔥 ${event.title} en ${event.venue || event.location}`,
@@ -267,8 +270,49 @@ export default function EventDetail({ params }: { params: Promise<{ id: string }
             </div>
           </div>
 
-          {/* 4. WHATSAPP CON STARBORDER */}
-          <div className="mb-10 w-full">
+          {/* 4. BOTONES EXTERNOS (Entradas, Redes, WhatsApp) */}
+          <div className="mb-10 w-full space-y-4">
+            
+            {/* BOTÓN DE ENTRADAS - SOLO APARECE SI HAY LINK */}
+            {event.ticketLink && (
+              <a 
+                href={event.ticketLink} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-2xl font-bold text-lg shadow-lg hover:scale-[1.02] transition-transform"
+              >
+                <Ticket size={24} />
+                COMPRAR ENTRADAS ONLINE
+              </a>
+            )}
+
+            {/* REDES SOCIALES - SOLO APARECEN SI HAY LINK */}
+            {(event.instagram || event.facebook) && (
+              <div className="flex flex-col sm:flex-row gap-4">
+                {event.instagram && (
+                  <a 
+                    href={event.instagram} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="flex-1 flex items-center justify-center gap-2 p-4 bg-gradient-to-r from-purple-600 to-pink-500 text-white rounded-2xl font-bold hover:opacity-90 transition-opacity shadow-lg"
+                  >
+                    <Camera size={20} /> Ver en Instagram
+                  </a>
+                )}
+                {event.facebook && (
+                  <a 
+                    href={event.facebook} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="flex-1 flex items-center justify-center gap-2 p-4 bg-[#1877F2] text-white rounded-2xl font-bold hover:opacity-90 transition-opacity shadow-lg"
+                  >
+                    <Globe size={20} /> Ver en Facebook
+                  </a>
+                )}
+              </div>
+            )}
+
+            {/* BOTÓN WHATSAPP DE SIEMPRE */}
             {!hasPhone ? (
               <button
                 disabled

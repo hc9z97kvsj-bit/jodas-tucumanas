@@ -193,21 +193,30 @@ export default function Home() {
                     #{index + 1}
                   </div>
                   
-                  {index === 0 ? (
-                    <StarBorder as="div" color="#D751F5" speed="4s" thickness={3} className="h-full w-full">
-                      <EventCard 
-                        id={evento.id}
-                        title={evento.title}
-                        venue={evento.venue}
-                        imageUrl={evento.imageUrl}
-                        location={evento.location}
-                        locality={evento.locality}
-                        date={evento.date}
-                        musicType={evento.musicType}
-                        likes={evento.likes}
-                        mediaType={evento.mediaType}
-                      />
-                    </StarBorder>
+{index === 0 ? (
+                    <div className="relative h-full rounded-[20px] p-[3px] overflow-hidden shadow-[0_0_30px_rgba(215,81,245,0.3)]">
+                      {/* Luz Fucsia Giratoria */}
+                      <div className="absolute top-1/2 left-1/2 aspect-square w-[250%] -translate-x-1/2 -translate-y-1/2 animate-[spin_4s_linear_infinite] bg-[conic-gradient(from_0deg,transparent_0_300deg,#D751F5_360deg)]"></div>
+                      
+                      {/* Luz Roja Giratoria (persiguiendo a la fucsia) */}
+                      <div className="absolute top-1/2 left-1/2 aspect-square w-[250%] -translate-x-1/2 -translate-y-1/2 animate-[spin_4s_linear_infinite] bg-[conic-gradient(from_180deg,transparent_0_300deg,#FF0A23_360deg)]"></div>
+                      
+                      {/* Contenedor interno que protege la tarjeta para que no tape las luces */}
+                      <div className="relative h-full w-full rounded-[17px] bg-night-900">
+                        <EventCard 
+                          id={evento.id}
+                          title={evento.title}
+                          venue={evento.venue}
+                          imageUrl={evento.imageUrl}
+                          location={evento.location}
+                          locality={evento.locality}
+                          date={evento.date}
+                          musicType={evento.musicType}
+                          likes={evento.likes}
+                          mediaType={evento.mediaType}
+                        />
+                      </div>
+                    </div>
                   ) : (
                     <div className="h-full rounded-2xl">
                       <EventCard 
@@ -224,6 +233,7 @@ export default function Home() {
                       />
                     </div>
                   )}
+                  
                 </div>
               ))}
             </div>
