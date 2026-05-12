@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Inter, Geist } from 'next/font/google';
 import './globals.css';
 import { cn } from "@/lib/utils";
@@ -15,9 +15,20 @@ const inter = Inter({
   subsets: ['latin'] 
 });
 
+// 👇 Agregamos el Viewport para que la barra de estado del celular se pinte de fucsia 👇
+export const viewport: Viewport = {
+  themeColor: '#D751F5',
+};
+
 export const metadata: Metadata = {
   title: 'Jodas Tucumanas | Cartelera',
   description: 'Descubrí los mejores bailes, recitales y fiestas en Tucumán.',
+  // 👇 Le avisamos al navegador que somos una App Instalable 👇
+  manifest: '/manifest.json',
+  icons: {
+    icon: '/icon-192.png',
+    apple: '/icon-192.png', // Para que funcione perfecto en el inicio de los iPhone
+  },
 };
 
 export default function RootLayout({
@@ -37,8 +48,7 @@ export default function RootLayout({
         {/* 👇 Inyectamos el fondo detrás de todo 👇 */}
         <BackgroundJoda />
 
-        {/* 
-          Acá se inyecta directamente app/page.tsx o app/eventos/[id]/page.tsx 
+        {/* Acá se inyecta directamente app/page.tsx o app/eventos/[id]/page.tsx 
           Sin header, sin nav, sin botón de admin. 100% limpio.
         */}
         {children}

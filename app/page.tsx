@@ -317,7 +317,7 @@ export default function Home() {
         </div>
         <div className="flex items-center gap-6">
           <Link href="/terminos" className="hover:text-brand-primary transition-colors">Términos y Condiciones</Link>
-          <a href="#" className="hover:text-brand-primary transition-colors">Contacto</a>
+          <Link href="/contacto" className="hover:text-brand-primary transition-colors">Contacto</Link>
         </div>
       </footer>
     </main>

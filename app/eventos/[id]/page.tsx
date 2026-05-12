@@ -4,8 +4,7 @@ import { useEffect, useState, use } from 'react';
 import { doc, getDoc, updateDoc, increment } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import Link from 'next/link';
-// 👇 Usamos Camera y Globe en vez de Instagram y Facebook para evitar el error de versión
-import { ArrowLeft, MapPin, Calendar, Music, Loader2, X, ZoomIn, PlayCircle, Heart, Building, Share2, Check, PhoneOff, MessageCircle, Ticket, Camera, Globe } from 'lucide-react';
+import { ArrowLeft, MapPin, Calendar, Music, Loader2, X, ZoomIn, PlayCircle, Heart, Building, Share2, Check, PhoneOff, MessageCircle, Ticket, Camera, Globe, Map } from 'lucide-react';
 import StarBorder from '@/components/StarBorder';
 
 interface EventData {
@@ -25,6 +24,7 @@ interface EventData {
   ticketLink?: string;
   instagram?: string;
   facebook?: string;
+  mapsLink?: string; // 👈 Agregamos el campo acá también
 }
 
 function formatearFecha(fechaStr: string) {
@@ -71,7 +71,6 @@ export default function EventDetail({ params }: { params: Promise<{ id: string }
           
           setEvent(eventDataCompleto);
           
-          // Fix matemático para asegurar que siempre cargue un número
           setLikesCount(Number(eventDataCompleto.likes || 0));
           
           if (localStorage.getItem(`liked_${id}`)) {
@@ -167,7 +166,6 @@ export default function EventDetail({ params }: { params: Promise<{ id: string }
     <>
       <main className="min-h-screen text-white pb-20">
         
-        {/* BOTÓN FLOTANTE: Volver */}
         <Link 
           href="/" 
           className="absolute top-6 left-4 sm:left-8 z-50 bg-black/50 backdrop-blur-md p-3 rounded-full text-white hover:bg-brand-primary hover:scale-105 transition-all border border-white/10 shadow-lg"
@@ -270,10 +268,9 @@ export default function EventDetail({ params }: { params: Promise<{ id: string }
             </div>
           </div>
 
-          {/* 4. BOTONES EXTERNOS (Entradas, Redes, WhatsApp) */}
+          {/* 4. BOTONES EXTERNOS */}
           <div className="mb-10 w-full space-y-4">
             
-            {/* BOTÓN DE ENTRADAS - SOLO APARECE SI HAY LINK */}
             {event.ticketLink && (
               <a 
                 href={event.ticketLink} 
@@ -286,7 +283,6 @@ export default function EventDetail({ params }: { params: Promise<{ id: string }
               </a>
             )}
 
-            {/* REDES SOCIALES - SOLO APARECEN SI HAY LINK */}
             {(event.instagram || event.facebook) && (
               <div className="flex flex-col sm:flex-row gap-4">
                 {event.instagram && (
@@ -312,7 +308,19 @@ export default function EventDetail({ params }: { params: Promise<{ id: string }
               </div>
             )}
 
-            {/* BOTÓN WHATSAPP DE SIEMPRE */}
+            {/* 👇 NUEVO BOTÓN: CÓMO LLEGAR (SOLO SI HAY LINK ESPECÍFICO) 👇 */}
+            {event.mapsLink && (
+              <a 
+                href={event.mapsLink} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-gradient-to-r from-blue-600 to-cyan-500 text-white rounded-2xl font-bold text-lg shadow-lg hover:scale-[1.02] transition-transform"
+              >
+                <Map size={24} />
+                CÓMO LLEGAR
+              </a>
+            )}
+
             {!hasPhone ? (
               <button
                 disabled

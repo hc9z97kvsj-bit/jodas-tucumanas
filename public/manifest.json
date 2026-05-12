@@ -1,0 +1,24 @@
+{
+  "name": "Jodas Tucumanas",
+  "short_name": "Jodas Tuc",
+  "description": "Cartelera de fiestas, recitales y eventos en Tucumán.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#111827",
+  "theme_color": "#D751F5",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
