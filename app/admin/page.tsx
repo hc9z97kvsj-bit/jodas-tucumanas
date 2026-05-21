@@ -1,81 +1,287 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy } from 'firebase/firestore';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { db, auth } from '@/lib/firebase';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { CalendarPlus, Save, CheckCircle, Loader2, Edit, Trash2, LogOut, Calendar, FilterX, Copy, Search, Link as LinkIcon, Wand2, Inbox } from 'lucide-react';
 
-const localidadesTucuman = [
-  "Aguilares", "Alderetes", "Acheral", "Amaicha del Valle", "Banda del Río Salí",
-  "Bella Vista", "Burruyacú", "Colalao del Valle", "Cruz Alta", "Concepción",
-  "Delfín Gallo", "El Cadillal", "El Manantial", "Estación Aráoz", "Famaillá",
-  "Graneros", "Juan Bautista Alberdi", "La Cocha", "La Florida", "Las Talitas",
-  "Leales", "Lastenia", "Los Ralos", "Lules", "Monteros", "Raco", "Ranchillos",
-  "Río Seco", "San Andrés", "San Javier", "San Miguel de Tucumán", "San Pablo",
-  "San Pedro de Colalao", "Santa Ana", "Simoca", "Tafí del Valle", "Tafí Viejo", "Taruca Pampa",
-  "Trancas", "Villa Carmela", "Villa Quinteros", "Yerba Buena", "Interior / Otra"
-];
+import {
+  Plus, Save, Edit2, Trash2, LogOut, Copy, Search, RefreshCw,
+  Inbox, Beer, PartyPopper, Clock, Eye, X, Headphones, MapPin,
+  LayoutGrid, Music, CalendarDays, Image, Link2, Phone,
+  CheckCircle2, Loader2, Wand2, AlertCircle, Layers, BookOpen, FileText, BarChart3, Hash
+} from 'lucide-react';
+
+/* ══════════════════════════════════════════════════════
+   TYPES
+══════════════════════════════════════════════════════ */
+
+interface Schedule {
+  isOpen: boolean;
+  open: string;
+  close: string;
+}
+
+// 👇 NUEVA INTERFAZ PARA MÚLTIPLES PROMOCIONES 👇
+interface Promotion {
+  id: string;
+  url: string;
+  mediaType: string;
+  active: boolean;
+}
 
 interface EventData {
   id: string;
+  category: 'evento' | 'bar' | 'dj';
   title: string;
-  venue: string;
+  venue?: string;
   imageUrl: string;
-  location: string;
-  locality: string;
-  date: string;
-  musicType: string;
-  phone: string;
-  description: string;
-  rating: number;
-  mediaType: string; 
+  profileImageUrl?: string;
+  location?: string;
+  locality?: string;
+  location2?: string;
+  locality2?: string;
+  phone2?: string;
+  date?: string;
+  schedule?: Record<string, Schedule>;
+  musicType?: string;
+  phone?: string;
+  description?: string;
+  rating?: number;
+  mediaType?: string;
   ticketLink?: string;
   instagram?: string;
   facebook?: string;
+  youtube?: string;
   mapsLink?: string;
+  createdAt?: string;
+  
+  // Nuevo formato múltiple
+  promotions?: Promotion[];
+  
+  // Mantengo las viejas como opcionales por compatibilidad con DB
+  promoUrl?: string;
+  promoMediaType?: string;
+  promoActive?: boolean;
 }
+
+/* ══════════════════════════════════════════════════════
+   CONSTANTS
+══════════════════════════════════════════════════════ */
+
+const LOCALIDADES = [
+  'San Miguel de Tucumán', 'Yerba Buena', 'Tafí Viejo', 'Alderetes',
+  'Banda del Río Salí', 'Lules', 'Monteros', 'Concepción', 'Famaillá',
+  'Tafí del Valle', 'Trancas', 'Burruyacú', 'Aguilares', 'La Cocha',
+  'Simoca', 'Juan Bautista Alberdi', 'Las Talitas', 'El Manantial',
+  'San Pablo', 'Santa Ana', 'San Javier', 'Raco', 'Amaicha del Valle',
+  'Colalao del Valle', 'Interior / Otra',
+];
+
+const MUSIC_TYPES = ['Cuarteto', 'Cumbia', 'Electrónica', 'Reggaeton', 'Folklore', 'Rock', 'Pop', 'Tropical', 'Varios'];
+const BAR_TYPES   = ['Cervecería', 'Restobar', 'Cocktail Bar', 'Pub / Música en vivo', 'Previa', 'Restorán'];
+
+const DEFAULT_SCHEDULE: Record<string, Schedule> = {
+  lunes:     { isOpen: false, open: '20:00', close: '03:00' },
+  martes:    { isOpen: false, open: '20:00', close: '03:00' },
+  miercoles: { isOpen: false, open: '20:00', close: '03:00' },
+  jueves:    { isOpen: true,  open: '20:00', close: '03:00' },
+  viernes:   { isOpen: true,  open: '20:00', close: '04:00' },
+  sabado:    { isOpen: true,  open: '20:00', close: '04:00' },
+  domingo:   { isOpen: false, open: '20:00', close: '03:00' },
+};
+
+const EMPTY_FORM: Omit<EventData, 'id'> = {
+  category: 'evento',
+  title: '', venue: '', imageUrl: '', profileImageUrl: '',
+  location: '', locality: 'San Miguel de Tucumán',
+  location2: '', locality2: 'Yerba Buena', phone2: '',
+  date: '', schedule: { ...DEFAULT_SCHEDULE },
+  musicType: 'Cuarteto', phone: '', description: '',
+  rating: 5, mediaType: 'image',
+  ticketLink: '', instagram: '', facebook: '', youtube: '', mapsLink: '',
+  promotions: [], // Empezamos con un array vacío
+};
+
+/* ══════════════════════════════════════════════════════
+   DESIGN TOKENS
+══════════════════════════════════════════════════════ */
+
+const C = {
+  bg:       '#070709',
+  surface:  '#0f0f12',
+  card:     '#14141a',
+  border:   'rgba(255,255,255,0.07)',
+  border2:  'rgba(255,255,255,0.12)',
+  muted:    'rgba(255,255,255,0.35)',
+  muted2:   'rgba(255,255,255,0.55)',
+  text:     '#f0f0f5',
+  purple:   '#9d6fff',
+  pink:     '#e040fb',
+  orange:   '#ff7043',
+  amber:    '#ffb74d',
+  indigo:   '#7986cb',
+  cyan:     '#26c6da',
+  green:    '#66bb6a',
+  red:      '#ef5350',
+};
+
+const CAT = {
+  evento: {
+    label: 'Evento / Fiesta',
+    Icon: PartyPopper,
+    gradient: `linear-gradient(135deg, ${C.pink}, #f44336)`,
+    accent: C.pink,
+    accentFaint: 'rgba(224,64,251,0.12)',
+    accentBorder: 'rgba(224,64,251,0.28)',
+  },
+  bar: {
+    label: 'Bar / Previa',
+    Icon: Beer,
+    gradient: `linear-gradient(135deg, ${C.orange}, ${C.amber})`,
+    accent: C.orange,
+    accentFaint: 'rgba(255,112,67,0.12)',
+    accentBorder: 'rgba(255,112,67,0.28)',
+  },
+  dj: {
+    label: 'DJ / Artista',
+    Icon: Headphones,
+    gradient: `linear-gradient(135deg, ${C.indigo}, ${C.purple})`,
+    accent: C.purple,
+    accentFaint: 'rgba(157,111,255,0.12)',
+    accentBorder: 'rgba(157,111,255,0.28)',
+  },
+} as const;
+
+/* ══════════════════════════════════════════════════════
+   SHARED STYLE OBJECTS
+══════════════════════════════════════════════════════ */
+
+const inp: React.CSSProperties = {
+  width: '100%', boxSizing: 'border-box',
+  background: C.surface, border: `1px solid ${C.border}`,
+  borderRadius: 9, padding: '9px 13px',
+  color: C.text, fontSize: 13, outline: 'none',
+  transition: 'border-color 0.18s',
+};
+
+/* ══════════════════════════════════════════════════════
+   UI ATOMS
+══════════════════════════════════════════════════════ */
+
+function Chip({ category }: { category: string }) {
+  const c = CAT[category as keyof typeof CAT] ?? CAT.evento;
+  const I = c.Icon;
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: c.accentFaint, color: c.accent, border: `1px solid ${c.accentBorder}`, padding: '3px 10px 3px 7px', borderRadius: 6, fontSize: 10, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+      <I size={11} /> {c.label.split('/')[0].trim()}
+    </span>
+  );
+}
+
+function SectionBlock({ icon: Icon, title, accent = C.purple, children }: { icon: React.ElementType; title: string; accent?: string; children: React.ReactNode }) {
+  return (
+    <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 13, overflow: 'hidden' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 15px', borderBottom: `1px solid ${C.border}`, background: 'rgba(255,255,255,0.015)' }}>
+        <div style={{ width: 28, height: 28, borderRadius: 7, background: `${accent}1a`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: accent, flexShrink: 0 }}>
+          <Icon size={14} />
+        </div>
+        <span style={{ fontWeight: 800, fontSize: 12.5, color: C.text, letterSpacing: '0.01em' }}>{title}</span>
+      </div>
+      <div style={{ padding: 15 }}>{children}</div>
+    </div>
+  );
+}
+
+function FieldRow({ children }: { children: React.ReactNode }) {
+  return <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 13 }}>{children}</div>;
+}
+
+function Field({ label, id, required, children }: { label: string; id: string; required?: boolean; children: React.ReactNode }) {
+  return (
+    <div>
+      <label htmlFor={id} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: C.muted, marginBottom: 6 }}>
+        {label} {required && <span style={{ color: C.pink, fontSize: 11 }}>*</span>}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+function IconBtn({ icon: Icon, label, color, bgHover, onClick, disabled = false, size = 30 }: { icon: React.ElementType; label: string; color: string; bgHover: string; onClick?: () => void; disabled?: boolean; size?: number }) {
+  const [hov, setHov] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={label}
+      aria-label={label}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{ width: size, height: size, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, background: hov ? bgHover : 'transparent', border: 'none', color, cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.35 : 1, transition: 'background 0.15s, opacity 0.15s', flexShrink: 0 }}
+    >
+      <Icon size={14} />
+    </button>
+  );
+}
+
+/* ══════════════════════════════════════════════════════
+   MAIN COMPONENT
+══════════════════════════════════════════════════════ */
 
 export default function AdminPage() {
   const router = useRouter();
+
+  /* ── Auth ── */
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loadingAuth, setLoadingAuth] = useState(true);
-  
+
+  /* ── Events state ── */
   const [events, setEvents] = useState<EventData[]>([]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [successMessage, setSuccessMessage] = useState('');
+  const [loadingData, setLoadingData] = useState(true);
+  const [dataError, setDataError] = useState('');
+
+  /* ── Form state ── */
+  const [form, setForm] = useState<Omit<EventData, 'id'>>(EMPTY_FORM);
   const [editingId, setEditingId] = useState<string | null>(null);
-
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [successMsg, setSuccessMsg] = useState('');
   const [sinNumero, setSinNumero] = useState(false);
-  
-  const [filterDate, setFilterDate] = useState('Todas');
-  const [searchTerm, setSearchTerm] = useState(''); 
+  const [showLoc2, setShowLoc2] = useState(false);
 
-  // 👇 ESTADOS PARA EL SCRAPER INTELIGENTE 👇
+  /* ── Instagram scrape ── */
   const [igUrl, setIgUrl] = useState('');
   const [isScraping, setIsScraping] = useState(false);
   const [scrapeError, setScrapeError] = useState('');
 
-  const [formData, setFormData] = useState({
-    title: '',
-    venue: '',
-    imageUrl: '',
-    location: '',
-    locality: 'San Miguel de Tucumán',
-    date: '',
-    musicType: 'Cuarteto',
-    phone: '',
-    description: '',
-    rating: 5,
-    mediaType: 'image',
-    ticketLink: '',
-    instagram: '',
-    facebook: '',
-    mapsLink: ''
-  });
+  /* ── Preview modal ── */
+  const [preview, setPreview] = useState<{ url: string; type: string } | null>(null);
 
+  /* ── Table filters ── */
+  const [search, setSearch] = useState('');
+  const [filterCat, setFilterCat] = useState<'all' | 'evento' | 'bar' | 'dj'>('all');
+
+  /* ── Fetch Real desde Firestore ── */
+  const fetchEvents = useCallback(async () => {
+    setLoadingData(true);
+    setDataError('');
+    try {
+      const q = query(collection(db, 'eventos'), orderBy('createdAt', 'desc'));
+      const snapshot = await getDocs(q);
+      const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() })) as EventData[];
+      setEvents(data);
+    } catch (error) {
+      console.error(error);
+      setDataError('No se pudieron cargar los eventos. Revisá tu conexión.');
+    } finally {
+      setLoadingData(false);
+    }
+  }, []);
+
+  /* ── Verificar Autenticación ── */
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
@@ -87,460 +293,758 @@ export default function AdminPage() {
       setLoadingAuth(false);
     });
     return () => unsubscribe();
-  }, [router]);
+  }, [router, fetchEvents]);
 
-  const fetchEvents = async () => {
-    try {
-      const q = query(collection(db, 'eventos'), orderBy('createdAt', 'desc'));
-      const querySnapshot = await getDocs(q);
-      const eventosData = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as EventData[];
-      setEvents(eventosData);
-    } catch (error) {
-      console.error("Error al obtener eventos:", error);
-    }
-  };
+  /* ── Derived Stats ── */
+  const stats = useMemo(() => ({
+    total:   events.length,
+    eventos: events.filter(e => e.category === 'evento').length,
+    bares:   events.filter(e => e.category === 'bar').length,
+    djs:     events.filter(e => e.category === 'dj').length,
+  }), [events]);
 
-  // 👇 FUNCIÓN PARA AUTOPRECARGAR DATOS DESDE INSTAGRAM 👇
-  const handleAutoFill = async () => {
-    if (!igUrl || !igUrl.includes('instagram.com')) {
-      setScrapeError('Por favor, ingresá un link válido de Instagram.');
-      return;
-    }
+  const filtered = useMemo(() =>
+    events.filter(ev => {
+      const matchCat = filterCat === 'all' || ev.category === filterCat;
+      const t = search.toLowerCase();
+      return matchCat && (!t || ev.title.toLowerCase().includes(t) || (ev.venue ?? '').toLowerCase().includes(t) || (ev.locality ?? '').toLowerCase().includes(t));
+    }),
+  [events, filterCat, search]);
 
-    setIsScraping(true);
-    setScrapeError('');
+  const currentCat = (form.category as keyof typeof CAT) in CAT ? form.category as keyof typeof CAT : 'evento';
+  const cat = CAT[currentCat];
 
-    try {
-      const res = await fetch(`https://api.microlink.io?url=${encodeURIComponent(igUrl)}`);
-      const data = await res.json();
-
-      if (data.status === 'success' && data.data) {
-        const fetchedImage = data.data.image?.url || '';
-        const fetchedDescription = data.data.description || '';
-        
-        const fullTitle = data.data.title || '';
-        let extractedVenue = '';
-        if (fullTitle.includes('(@')) {
-           extractedVenue = fullTitle.split('(@')[0].trim();
-        }
-
-        setFormData(prev => ({
-          ...prev,
-          imageUrl: fetchedImage || prev.imageUrl,
-          description: fetchedDescription || prev.description,
-          venue: extractedVenue || prev.venue,
-          instagram: igUrl 
-        }));
-        
-        setIgUrl(''); 
-        alert('¡Datos pre-cargados con éxito! Revisalos y completá el resto.');
-      } else {
-        setScrapeError('Instagram bloqueó la lectura de este link. Carga manual requerida.');
-      }
-    } catch (error) {
-      console.error("Error al extraer datos:", error);
-      setScrapeError('Hubo un error de conexión. Carga manual requerida.');
-    } finally {
-      setIsScraping(false);
-    }
-  };
-
+  /* ── Handlers de Campos Básicos ── */
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    let cleanValue = value;
+    const clean = (name === 'imageUrl' || name === 'profileImageUrl') ? value.replace(/\[\/?img\]/gi, '').trim() : value;
+    setForm(p => ({ ...p, [name]: clean }));
+  };
 
-    if (name === 'imageUrl') {
-      cleanValue = value.replace(/\[\/?img\]/gi, '').trim();
-    }
+  const handleSchedule = (day: string, field: string, value: string | boolean) => {
+    setForm(p => ({ ...p, schedule: { ...p.schedule, [day]: { ...p.schedule![day], [field]: value } } }));
+  };
 
-    setFormData(prev => ({ ...prev, [name]: cleanValue }));
+  /* ── Handlers de PROMOCIONES MÚLTIPLES ── */
+  const addPromotion = () => {
+    setForm(p => ({
+      ...p,
+      promotions: [
+        ...(p.promotions || []),
+        { id: Date.now().toString(), url: '', mediaType: 'image', active: true }
+      ]
+    }));
+  };
+
+  const updatePromotion = (id: string, field: keyof Promotion, value: any) => {
+    setForm(p => ({
+      ...p,
+      promotions: p.promotions?.map(promo => promo.id === id ? { ...promo, [field]: value } : promo)
+    }));
+  };
+
+  const removePromotion = (id: string) => {
+    setForm(p => ({
+      ...p,
+      promotions: p.promotions?.filter(promo => promo.id !== id)
+    }));
+  };
+
+  /* ── Reset y Submit ── */
+  const resetForm = () => {
+    setForm(EMPTY_FORM);
+    setEditingId(null);
+    setSinNumero(false);
+    setShowLoc2(false);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-
     try {
-      const eventPayload = {
-        ...formData,
-        phone: sinNumero ? '' : formData.phone
+      // Limpiamos los campos legacy por las dudas
+      const { promoUrl, promoMediaType, promoActive, ...cleanedForm } = form as any;
+
+      const payload = {
+        ...cleanedForm,
+        phone: sinNumero ? '' : form.phone,
+        date: form.category !== 'evento' ? '' : form.date,
+        location2: showLoc2 ? form.location2 : '',
+        locality2: showLoc2 ? form.locality2 : '',
+        phone2: showLoc2 ? form.phone2 : '',
       };
-
-      if (editingId) {
-        const eventRef = doc(db, 'eventos', editingId);
-        await updateDoc(eventRef, eventPayload);
-        setSuccessMessage('Evento actualizado correctamente');
-      } else {
-        await addDoc(collection(db, 'eventos'), {
-          ...eventPayload,
-          createdAt: new Date().toISOString()
-        });
-        setSuccessMessage('Evento publicado en la cartelera');
-      }
-
-      setFormData({
-        title: '', venue: '', imageUrl: '', location: '', locality: 'San Miguel de Tucumán', date: '', musicType: 'Cuarteto', phone: '', description: '', rating: 5, mediaType: 'image',
-        ticketLink: '', instagram: '', facebook: '', mapsLink: ''
-      });
-      setSinNumero(false);
-      setEditingId(null);
-      fetchEvents();
       
-      setTimeout(() => setSuccessMessage(''), 3000);
-    } catch (error) {
-      console.error("Error al procesar el evento:", error);
-      alert("Hubo un error en la base de datos.");
+      if (editingId) {
+        await updateDoc(doc(db, 'eventos', editingId), payload);
+        setSuccessMsg('Actualizado correctamente');
+      } else {
+        const payloadWithDate = { ...payload, createdAt: new Date().toISOString() };
+        await addDoc(collection(db, 'eventos'), payloadWithDate);
+        setSuccessMsg('Publicado con éxito');
+      }
+      
+      resetForm();
+      fetchEvents();
+      setTimeout(() => setSuccessMsg(''), 4000);
+    } catch (err) {
+      alert('Error al guardar. Revisá la consola.');
+      console.error(err);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleEdit = (evento: EventData) => {
-    setFormData({
-      title: evento.title || '',
-      venue: evento.venue || '',
-      imageUrl: evento.imageUrl || '',
-      location: evento.location || '',
-      locality: evento.locality || 'San Miguel de Tucumán',
-      date: evento.date || '',
-      musicType: evento.musicType || 'Cuarteto',
-      phone: evento.phone || '',
-      description: evento.description || '',
-      rating: evento.rating || 5,
-      mediaType: evento.mediaType || 'image',
-      ticketLink: evento.ticketLink || '',
-      instagram: evento.instagram || '',
-      facebook: evento.facebook || '',
-      mapsLink: evento.mapsLink || ''
-    });
-    setEditingId(evento.id);
-    setSinNumero(!evento.phone || evento.phone.trim() === '');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const handleDuplicate = (evento: EventData) => {
-    setFormData({
-      title: evento.title || '',
-      venue: evento.venue || '',
-      imageUrl: evento.imageUrl || '',
-      location: evento.location || '',
-      locality: evento.locality || 'San Miguel de Tucumán',
-      date: evento.date || '',
-      musicType: evento.musicType || 'Cuarteto',
-      phone: evento.phone || '',
-      description: evento.description || '',
-      rating: evento.rating || 5,
-      mediaType: evento.mediaType || 'image',
-      ticketLink: evento.ticketLink || '',
-      instagram: evento.instagram || '',
-      facebook: evento.facebook || '',
-      mapsLink: evento.mapsLink || ''
-    });
-    setEditingId(null); 
-    setSinNumero(!evento.phone || evento.phone.trim() === '');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const handleDelete = async (id: string) => {
-    if (window.confirm('¿Estás seguro de que deseas eliminar este evento permanentemente?')) {
-      try {
-        await deleteDoc(doc(db, 'eventos', id));
-        fetchEvents();
-      } catch (error) {
-        console.error("Error al eliminar:", error);
-      }
-    }
-  };
-
-  const handleLogout = async () => {
-    await signOut(auth);
-    router.push('/');
-  };
-
-  const resetForm = () => {
-    setEditingId(null);
-    setSinNumero(false);
-    setFormData({ 
-      title: '', venue: '', imageUrl: '', location: '', locality: 'San Miguel de Tucumán', date: '', musicType: 'Cuarteto', phone: '', description: '', rating: 5, mediaType: 'image',
-      ticketLink: '', instagram: '', facebook: '', mapsLink: '' 
-    });
-  };
-
-  const availableDates = useMemo(() => {
-    const dates = events.map(e => {
-      if (!e.date) return null;
-      return e.date.split('T')[0]; 
-    }).filter(Boolean) as string[];
+  // Carga inteligente: si el evento es viejo y usaba promoUrl, lo convierte a la nueva lista
+  const loadIntoForm = (ev: EventData, keep: boolean) => {
+    const { id, createdAt, ...rest } = ev;
     
-    const uniqueDates = Array.from(new Set(dates)).sort(); 
-    return ['Todas', ...uniqueDates];
-  }, [events]);
+    let mappedPromos = ev.promotions || [];
+    if (!ev.promotions && ev.promoUrl) {
+      mappedPromos = [{
+        id: Date.now().toString(),
+        url: ev.promoUrl,
+        mediaType: ev.promoMediaType || 'image',
+        active: ev.promoActive !== false
+      }];
+    }
 
-  const filteredTableEvents = useMemo(() => {
-    return events.filter(event => {
-      const matchDate = filterDate === 'Todas' || (event.date && event.date.startsWith(filterDate));
-      const term = searchTerm.toLowerCase();
-      const matchSearch = 
-        (event.title && event.title.toLowerCase().includes(term)) ||
-        (event.venue && event.venue.toLowerCase().includes(term)) ||
-        (event.locality && event.locality.toLowerCase().includes(term));
-      return matchDate && matchSearch;
-    });
-  }, [events, filterDate, searchTerm]);
+    setForm({ ...EMPTY_FORM, ...rest, promotions: mappedPromos });
+    setEditingId(keep ? id : null);
+    setSinNumero(!ev.phone || ev.phone.trim() === '');
+    setShowLoc2(!!ev.location2);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
-  const formatShortDate = (dateStr: string) => {
-    if (dateStr === 'Todas') return 'Todas las fechas';
+  const handleDelete = async (id: string, title: string) => {
+    if (!window.confirm(`¿Eliminar "${title}" permanentemente?`)) return;
     try {
-      const [year, month, day] = dateStr.split('-');
-      const fecha = new Date(Number(year), Number(month) - 1, Number(day));
-      const dias = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
-      return `${dias[fecha.getDay()]} ${day}/${month}/${year}`;
-    } catch {
-      return dateStr;
+      await deleteDoc(doc(db, 'eventos', id));
+      fetchEvents();
+    } catch (err) {
+      console.error(err);
+      alert('Hubo un error al eliminar.');
     }
   };
 
-  if (loadingAuth) {
-    return (
-      <div className="min-h-screen bg-night-900 flex justify-center items-center">
-        <Loader2 className="animate-spin text-brand-primary w-10 h-10" />
-      </div>
-    );
-  }
+  const handleAutoFill = async () => {
+    if (!igUrl || !igUrl.includes('instagram.com')) {
+      setScrapeError('Ingresá un link válido de Instagram.');
+      return;
+    }
+    setIsScraping(true);
+    setScrapeError('');
+    try {
+      const res = await fetch('/api/instagram', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: igUrl }) });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      const mediaUrl = data?.data?.videoUrl ?? data?.data?.imageUrl ?? '';
+      const desc = data?.data?.caption ?? '';
+      if (!mediaUrl) { setScrapeError('Formato de respuesta no reconocido.'); return; }
+      setForm(p => ({ ...p, imageUrl: mediaUrl, description: desc || p.description, instagram: igUrl }));
+      setIgUrl('');
+    } catch {
+      setScrapeError('Error de conexión o perfil privado.');
+    } finally {
+      setIsScraping(false);
+    }
+  };
 
+  const fmtDate = (d: string) => {
+    if (!d) return '—';
+    try {
+      const [date] = d.split('T');
+      const [y, m, day] = date.split('-');
+      const obj = new Date(Number(y), Number(m) - 1, Number(day));
+      const dias = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+      return `${dias[obj.getDay()]} ${day}/${m}`;
+    } catch { return d; }
+  };
+
+  /* ══════════════════════════════════════════════════════
+     LOADING / AUTH
+  ══════════════════════════════════════════════════════ */
+
+  if (loadingAuth) return (
+    <div style={{ minHeight: '100vh', background: C.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, color: C.muted, fontSize: 14 }}>
+      <Loader2 size={22} style={{ animation: 'spin .8s linear infinite', color: C.purple }} />
+      Verificando sesión...
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+    </div>
+  );
   if (!isAuthenticated) return null;
 
-  const inputStyles = "w-full bg-night-900 border border-night-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary transition-colors";
-  const labelStyles = "block text-sm font-medium text-gray-400 mb-1.5";
+  /* ══════════════════════════════════════════════════════
+     RENDER
+  ══════════════════════════════════════════════════════ */
 
   return (
-    <div className="min-h-screen bg-night-900 text-white p-4 sm:p-8">
-      <div className="max-w-5xl mx-auto">
-        
-        {/* 👇 HEADER CON EL NUEVO BOTÓN DE "VER PEDIDOS" 👇 */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 pb-4 border-b border-night-700 gap-4">
-          <div className="flex items-center gap-3">
-            <div className="bg-brand-primary/20 p-2 rounded-lg">
-              <CalendarPlus className="text-brand-primary" size={28} />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold">Gestión de Cartelera</h1>
-              <p className="text-gray-400 text-sm">Administración segura</p>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <Link 
-              href="/admin/solicitudes" 
-              className="flex items-center gap-2 text-sm text-white hover:text-brand-primary transition-colors bg-night-800 hover:bg-night-700 px-4 py-2 rounded-lg border border-night-700"
-            >
-              <Inbox size={16} /> Ver Pedidos
-            </Link>
-            <button 
-              onClick={handleLogout}
-              className="flex items-center gap-2 text-sm text-gray-400 hover:text-red-400 transition-colors bg-night-800 hover:bg-night-700 px-4 py-2 rounded-lg border border-night-700"
-            >
-              <LogOut size={16} /> Cerrar Sesión
+    <div style={{ minHeight: '100vh', background: C.bg, color: C.text, fontFamily: 'system-ui,-apple-system,sans-serif' }}>
+      <style>{`
+        @keyframes spin{to{transform:rotate(360deg)}}
+        @keyframes fadeIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
+        input:focus,select:focus,textarea:focus{border-color:${C.purple} !important}
+        input[type=time]::-webkit-calendar-picker-indicator{filter:invert(.6)}
+        input[type=datetime-local]::-webkit-calendar-picker-indicator{filter:invert(.6)}
+        ::placeholder{color:rgba(255,255,255,0.22)}
+        select option{background:${C.card}}
+        ::-webkit-scrollbar{width:5px;height:5px}
+        ::-webkit-scrollbar-track{background:transparent}
+        ::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:99px}
+      `}</style>
+
+      {/* Preview modal */}
+      {preview && (
+        <div role="dialog" aria-modal="true" aria-label="Vista previa" onClick={() => setPreview(null)}
+          style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(0,0,0,0.9)', backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <div onClick={e => e.stopPropagation()} style={{ position: 'relative', maxWidth: 540, width: '100%', animation: 'fadeIn .2s ease' }}>
+            <button onClick={() => setPreview(null)} title="Cerrar" aria-label="Cerrar vista previa"
+              style={{ position: 'absolute', top: -44, right: 0, width: 36, height: 36, borderRadius: '50%', background: C.card, border: `1px solid ${C.border}`, color: C.text, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <X size={16} />
             </button>
+            {preview.type === 'video'
+              ? <video src={preview.url} controls autoPlay style={{ width: '100%', borderRadius: 14, maxHeight: '80vh' }} />
+              : <img src={preview.url} alt="Vista previa" style={{ width: '100%', borderRadius: 14, maxHeight: '80vh', objectFit: 'contain', background: '#000' }} />
+            }
+          </div>
+        </div>
+      )}
+
+      {/* ── TOPBAR ── */}
+      <header style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, height: 58, padding: '0 22px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 100 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
+          <div style={{ width: 34, height: 34, borderRadius: 10, background: `linear-gradient(135deg,${C.pink},${C.purple})`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Layers size={18} color="#fff" />
+          </div>
+          <div>
+            <div style={{ fontWeight: 900, fontSize: 14, letterSpacing: '-0.025em', color: C.text }}>Tucumán Nocturno</div>
+            <div style={{ fontSize: 9.5, color: C.muted, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}>Panel de Administración</div>
           </div>
         </div>
 
-        {/* FORMULARIO DE CARGA */}
-        <div className="bg-night-800 rounded-2xl p-6 sm:p-8 border border-night-700 shadow-xl mb-10">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button
+            type="button"
+            onClick={fetchEvents}
+            title="Recargar eventos"
+            aria-label="Recargar eventos desde Firestore"
+            style={{ width: 34, height: 34, borderRadius: 9, background: 'rgba(255,255,255,0.04)', border: `1px solid ${C.border}`, color: C.muted2, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          >
+            <RefreshCw size={14} style={{ animation: loadingData ? 'spin .8s linear infinite' : 'none' }} />
+          </button>
           
-          <h2 className="text-xl font-bold mb-6 text-brand-primary">
-            {editingId ? 'Editando Evento Existente' : 'Cargar Nuevo Evento'}
-          </h2>
+          <Link href="/admin/solicitudes" aria-label="Ver solicitudes"
+            style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '7px 13px', borderRadius: 9, background: CAT.evento.accentFaint, border: `1px solid ${CAT.evento.accentBorder}`, color: C.pink, fontSize: 12, fontWeight: 700, textDecoration: 'none' }}>
+            <Inbox size={13} /> Solicitudes
+          </Link>
+          <button
+            type="button"
+            title="Cerrar sesión"
+            aria-label="Cerrar sesión"
+            onClick={() => { signOut(auth).then(() => router.push('/')) }}
+            style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '7px 13px', borderRadius: 9, background: 'rgba(239,83,80,0.08)', border: '1px solid rgba(239,83,80,0.2)', color: C.red, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            <LogOut size={13} /> Salir
+          </button>
+        </div>
+      </header>
 
-          {!editingId && (
-            <div className="bg-gradient-to-r from-purple-900/40 to-[#D751F5]/10 border border-[#D751F5]/30 p-5 rounded-2xl mb-8 shadow-inner">
-              <h3 className="text-sm font-bold text-white mb-3 flex items-center gap-2">
-                <Wand2 size={18} className="text-[#D751F5]" />
-                Autocompletar Inteligente
-              </h3>
-              <div className="flex flex-col sm:flex-row gap-3">
-                <input 
-                  type="url" 
-                  value={igUrl}
-                  onChange={(e) => setIgUrl(e.target.value)}
-                  placeholder="https://www.instagram.com/p/..." 
-                  className="flex-1 bg-night-900 border border-night-600 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-[#D751F5] transition-colors"
-                />
-                <button 
-                  type="button"
-                  onClick={handleAutoFill}
-                  disabled={isScraping}
-                  className="bg-[#D751F5] hover:bg-[#D751F5]/80 text-white font-medium px-6 py-2.5 rounded-lg flex items-center justify-center gap-2 transition-colors disabled:opacity-50 whitespace-nowrap"
-                >
-                  {isScraping ? <Loader2 size={18} className="animate-spin" /> : 'Extraer Datos'}
+      <main style={{ maxWidth: 1120, margin: '0 auto', padding: '24px 18px 64px' }}>
+
+        {/* ── STATS ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 11, marginBottom: 22 }}>
+          {([
+            { label: 'Total',   value: stats.total,   icon: BarChart3,    color: C.purple },
+            { label: 'Eventos', value: stats.eventos, icon: PartyPopper,  color: C.pink   },
+            { label: 'Bares',   value: stats.bares,   icon: Beer,         color: C.orange },
+            { label: 'DJs',     value: stats.djs,     icon: Headphones,   color: C.indigo },
+          ] as const).map(({ label, value, icon: Icon, color }) => (
+            <div key={label} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 13, padding: '15px 17px', display: 'flex', alignItems: 'center', gap: 14 }}>
+              <div style={{ width: 38, height: 38, borderRadius: 9, background: `${color}1a`, display: 'flex', alignItems: 'center', justifyContent: 'center', color, flexShrink: 0 }}>
+                <Icon size={17} />
+              </div>
+              <div>
+                {loadingData
+                  ? <div style={{ width: 28, height: 22, background: 'rgba(255,255,255,0.06)', borderRadius: 5, animation: 'pulse 1.4s ease infinite' }} />
+                  : <div style={{ fontSize: 25, fontWeight: 900, color: C.text, lineHeight: 1 }}>{value}</div>
+                }
+                <div style={{ fontSize: 10.5, color: C.muted, fontWeight: 600, marginTop: 3 }}>{label}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* ════ FORM CARD ════ */}
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 18, marginBottom: 18 }}>
+
+          {/* Form header */}
+          <div style={{ padding: '16px 22px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ width: 32, height: 32, borderRadius: 9, background: editingId ? 'rgba(38,198,218,0.12)' : 'rgba(157,111,255,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: editingId ? C.cyan : C.purple }}>
+                {editingId ? <Edit2 size={15} /> : <Plus size={15} />}
+              </div>
+              <div>
+                <div style={{ fontWeight: 800, fontSize: 14.5, color: C.text }}>{editingId ? 'Editando publicación' : 'Nueva publicación'}</div>
+                <div style={{ fontSize: 11, color: C.muted }}>
+                  {editingId ? `ID: ${editingId}` : 'Completá los campos para publicar en el directorio'}
+                </div>
+              </div>
+            </div>
+            {editingId && (
+              <button type="button" onClick={resetForm} title="Cancelar edición" aria-label="Cancelar edición"
+                style={{ padding: '6px 13px', borderRadius: 8, background: 'transparent', border: `1px solid ${C.border}`, color: C.muted, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                Cancelar
+              </button>
+            )}
+          </div>
+
+          {/* Category selector */}
+          <div style={{ padding: '18px 22px 0' }}>
+            <div role="group" aria-label="Categoría de publicación" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 7, background: C.surface, padding: 5, borderRadius: 12, border: `1px solid ${C.border}` }}>
+              {(['evento','bar','dj'] as const).map(c => {
+                const cc = CAT[c];
+                const active = form.category === c;
+                const I = cc.Icon;
+                return (
+                  <button key={c} type="button"
+                    aria-pressed={active}
+                    aria-label={`Categoría: ${cc.label}`}
+                    title={`Seleccionar: ${cc.label}`}
+                    onClick={() => setForm(p => ({ ...p, category: c }))}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '10px 0', borderRadius: 9, fontWeight: 800, fontSize: 12.5, background: active ? cc.gradient : 'transparent', color: active ? '#fff' : C.muted, border: 'none', cursor: 'pointer', boxShadow: active ? '0 4px 18px rgba(0,0,0,0.35)' : 'none', transition: 'all .2s' }}>
+                    <I size={14} /> {cc.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* IG autofill */}
+          {form.category !== 'dj' && (
+            <div style={{ margin: '16px 22px 0', padding: '14px 16px', borderRadius: 12, background: CAT.evento.accentFaint, border: `1px solid ${CAT.evento.accentBorder}` }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 10, fontSize: 12.5, fontWeight: 800, color: C.pink }}>
+                <Wand2 size={14} /> Autocompletar desde Instagram
+              </div>
+              <div style={{ display: 'flex', gap: 9 }}>
+                <label htmlFor="igUrl" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap' }}>URL de Instagram</label>
+                <input id="igUrl" type="url" value={igUrl} onChange={e => setIgUrl(e.target.value)} placeholder="https://www.instagram.com/p/..." aria-label="URL de publicación de Instagram" style={{ ...inp, flexGrow: 1 }} />
+                <button type="button" onClick={handleAutoFill} disabled={isScraping || !igUrl}
+                  title="Extraer flyer" aria-label="Extraer flyer de Instagram"
+                  style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 17px', borderRadius: 9, background: `linear-gradient(135deg,${C.pink},${C.purple})`, color: '#fff', fontWeight: 800, fontSize: 12, border: 'none', cursor: isScraping || !igUrl ? 'not-allowed' : 'pointer', opacity: isScraping || !igUrl ? 0.55 : 1, whiteSpace: 'nowrap' }}>
+                  {isScraping ? <Loader2 size={13} style={{ animation: 'spin .8s linear infinite' }} /> : <Wand2 size={13} />}
+                  Extraer
                 </button>
               </div>
-              {scrapeError && (
-                <p className="text-red-400 text-sm mt-2">{scrapeError}</p>
-              )}
-              <p className="text-gray-400 text-xs mt-2">
-                * Extrae la imagen y descripción automáticamente. Puede fallar si la cuenta de Instagram es privada o si Meta bloquea la conexión.
-              </p>
+              {scrapeError && <p role="alert" style={{ margin: '8px 0 0', fontSize: 12, color: C.red, display: 'flex', alignItems: 'center', gap: 6 }}><AlertCircle size={13} />{scrapeError}</p>}
             </div>
           )}
-          
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label htmlFor="title" className={labelStyles}>Nombre del Evento / Fiesta</label>
-                <input id="title" required type="text" name="title" value={formData.title} onChange={handleChange} placeholder="Ej: El Cumbión, La Konga..." className={inputStyles} />
-              </div>
-              <div>
-                <label htmlFor="venue" className={labelStyles}>Lugar / Boliche</label>
-                <input id="venue" required type="text" name="venue" value={formData.venue} onChange={handleChange} placeholder="Ej: Jungle, Club Central Córdoba..." className={inputStyles} />
-              </div>
-            </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label htmlFor="locality" className={labelStyles}>Localidad / Zona</label>
-                <select id="locality" name="locality" value={formData.locality} onChange={handleChange} className={inputStyles} style={{ colorScheme: 'dark' }}>
-                  {localidadesTucuman.map((loc) => (
-                    <option key={loc} value={loc} style={{ backgroundColor: '#111827', color: 'white' }}>{loc}</option>
+          {/* ── FORM ── */}
+          <form onSubmit={handleSubmit} style={{ padding: '18px 22px 22px', display: 'flex', flexDirection: 'column', gap: 13 }}>
+
+            {/* ── DJ branch ── */}
+            {form.category === 'dj' ? (
+              <>
+                <SectionBlock icon={Headphones} title="Información del Artista" accent={C.indigo}>
+                  <FieldRow>
+                    <Field label="Nombre del DJ / Artista" id="title" required>
+                      <input id="title" name="title" required type="text" value={form.title} onChange={handleChange} placeholder="Ej: DJ Kairuz" aria-required="true" style={inp} />
+                    </Field>
+                    <Field label="Set / Álbum más conocido" id="description">
+                      <input id="description" name="description" type="text" value={form.description ?? ''} onChange={handleChange} placeholder="Ej: Enganchado RKT 2026" style={inp} />
+                    </Field>
+                  </FieldRow>
+                  <div style={{ marginTop: 13 }}>
+                    <Field label="Foto del DJ (URL)" id="imageUrl" required>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <input id="imageUrl" name="imageUrl" required type="url" value={form.imageUrl} onChange={handleChange} placeholder="https://..." aria-required="true" style={inp} />
+                        <IconBtn icon={Eye} label="Previsualizar foto" color={C.cyan} bgHover="rgba(38,198,218,0.12)" onClick={() => form.imageUrl && setPreview({ url: form.imageUrl, type: 'image' })} disabled={!form.imageUrl} size={38} />
+                      </div>
+                    </Field>
+                  </div>
+                </SectionBlock>
+                <SectionBlock icon={Link2} title="Redes y Contacto" accent={C.indigo}>
+                  <FieldRow>
+                    <Field label="YouTube (Set / Video)" id="youtube">
+                      <input id="youtube" name="youtube" type="url" value={form.youtube ?? ''} onChange={handleChange} placeholder="https://youtube.com/..." style={inp} />
+                    </Field>
+                    <Field label="Instagram" id="instagram">
+                      <input id="instagram" name="instagram" type="url" value={form.instagram ?? ''} onChange={handleChange} placeholder="https://instagram.com/..." style={inp} />
+                    </Field>
+                    <Field label="WhatsApp" id="phone">
+                      <input id="phone" name="phone" type="text" value={form.phone ?? ''} onChange={handleChange} placeholder="5493810000000" style={inp} />
+                    </Field>
+                  </FieldRow>
+                </SectionBlock>
+              </>
+            ) : (
+              /* ── Evento / Bar branch ── */
+              <>
+                <SectionBlock icon={FileText} title="Información Básica" accent={cat.accent}>
+                  <FieldRow>
+                    <Field label={form.category === 'bar' ? 'Nombre del Bar / Local' : 'Nombre del Evento / Fiesta'} id="title" required>
+                      <input id="title" name="title" required type="text" value={form.title} onChange={handleChange} placeholder={form.category === 'bar' ? 'Ej: Antares Tucumán' : 'Ej: El Cumbión 2025'} aria-required="true" style={inp} />
+                    </Field>
+                    <Field label={form.category === 'bar' ? 'Subtítulo (Ej: Cervecería)' : 'Lugar / Boliche'} id="venue">
+                      <input id="venue" name="venue" type="text" value={form.venue ?? ''} onChange={handleChange} placeholder={form.category === 'bar' ? 'Ej: Cervecería Artesanal' : 'Ej: Jungle Club'} style={inp} />
+                    </Field>
+                  </FieldRow>
+                </SectionBlock>
+
+                <SectionBlock icon={MapPin} title="Ubicación Principal" accent={C.cyan}>
+                  <FieldRow>
+                    <Field label="Localidad / Zona" id="locality">
+                      <select id="locality" name="locality" value={form.locality} onChange={handleChange} title="Localidad" aria-label="Localidad o zona" style={{ ...inp, colorScheme: 'dark' }}>
+                        {LOCALIDADES.map(l => <option key={l} value={l}>{l}</option>)}
+                      </select>
+                    </Field>
+                    <Field label="Dirección exacta" id="location" required>
+                      <input id="location" name="location" required type="text" value={form.location ?? ''} onChange={handleChange} placeholder="Ej: 24 de Septiembre 1326" aria-required="true" style={inp} />
+                    </Field>
+                  </FieldRow>
+                </SectionBlock>
+
+                {/* Segunda sucursal (bares) */}
+                {form.category === 'bar' && (
+                  <div style={{ borderRadius: 12, border: showLoc2 ? `1px solid ${CAT.bar.accentBorder}` : `1px dashed ${C.border}`, overflow: 'hidden' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '11px 15px', background: showLoc2 ? CAT.bar.accentFaint : 'transparent' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: showLoc2 ? C.orange : C.muted, fontWeight: 700, fontSize: 12.5 }}>
+                        <MapPin size={13} /> Segunda Sucursal <span style={{ fontWeight: 500, fontSize: 11 }}>(opcional)</span>
+                      </div>
+                      <button type="button" onClick={() => setShowLoc2(p => !p)}
+                        title={showLoc2 ? 'Quitar segunda sucursal' : 'Agregar segunda sucursal'}
+                        aria-label={showLoc2 ? 'Quitar segunda sucursal' : 'Agregar segunda sucursal'}
+                        aria-expanded={showLoc2}
+                        style={{ padding: '4px 11px', borderRadius: 6, fontSize: 11, fontWeight: 800, background: showLoc2 ? 'rgba(239,83,80,0.1)' : CAT.bar.accentFaint, color: showLoc2 ? C.red : C.orange, border: 'none', cursor: 'pointer' }}>
+                        {showLoc2 ? 'Quitar' : '+ Agregar'}
+                      </button>
+                    </div>
+                    {showLoc2 && (
+                      <div style={{ padding: '0 15px 15px' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 13 }}>
+                          <Field label="Localidad 2" id="locality2">
+                            <select id="locality2" name="locality2" value={form.locality2} onChange={handleChange} title="Segunda localidad" aria-label="Segunda localidad" style={{ ...inp, colorScheme: 'dark' }}>
+                              {LOCALIDADES.map(l => <option key={l} value={l}>{l}</option>)}
+                            </select>
+                          </Field>
+                          <Field label="Dirección 2" id="location2">
+                            <input id="location2" name="location2" type="text" value={form.location2 ?? ''} onChange={handleChange} placeholder="Ej: Av. Perón 1500" style={inp} />
+                          </Field>
+                          <div style={{ gridColumn: '1/-1' }}>
+                            <Field label="WhatsApp Sucursal 2" id="phone2">
+                              <input id="phone2" name="phone2" type="text" value={form.phone2 ?? ''} onChange={handleChange} placeholder="5493810000000" style={inp} />
+                            </Field>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Fecha / Horarios */}
+                {form.category === 'evento' ? (
+                  <SectionBlock icon={CalendarDays} title="Fecha y Música" accent={C.purple}>
+                    <FieldRow>
+                      <Field label="Fecha y Hora" id="date" required>
+                        <input id="date" name="date" required type="datetime-local" value={form.date ?? ''} onChange={handleChange} title="Fecha y hora del evento" aria-label="Fecha y hora del evento" aria-required="true" style={{ ...inp, colorScheme: 'dark' }} />
+                      </Field>
+                      <Field label="Tipo de Música" id="musicType">
+                        <select id="musicType" name="musicType" value={form.musicType} onChange={handleChange} title="Tipo de música" aria-label="Tipo de música" style={{ ...inp, colorScheme: 'dark' }}>
+                          {MUSIC_TYPES.map(m => <option key={m} value={m}>{m}</option>)}
+                        </select>
+                      </Field>
+                    </FieldRow>
+                  </SectionBlock>
+                ) : (
+                  <SectionBlock icon={Clock} title="Horarios Semanales" accent={C.orange}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                      <p style={{ fontSize: 11, color: C.muted, margin: 0 }}>Días desmarcados se muestran como "Cerrado".</p>
+                      <select value={form.musicType} onChange={handleChange} name="musicType" title="Tipo de establecimiento" aria-label="Tipo de establecimiento" style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '5px 9px', fontSize: 11, color: C.text, colorScheme: 'dark' }}>
+                        {BAR_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 7 }}>
+                      {Object.keys(form.schedule ?? DEFAULT_SCHEDULE).map(day => {
+                        const d = (form.schedule ?? DEFAULT_SCHEDULE)[day];
+                        return (
+                          <div key={day} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 12px', borderRadius: 9, background: d.isOpen ? 'rgba(255,112,67,0.07)' : 'rgba(255,255,255,0.02)', border: `1px solid ${d.isOpen ? CAT.bar.accentBorder : C.border}` }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                              <input type="checkbox" checked={d.isOpen} onChange={e => handleSchedule(day, 'isOpen', e.target.checked)} title={`${day} – ${d.isOpen ? 'abierto' : 'cerrado'}`} aria-label={`${day}, marcar como ${d.isOpen ? 'cerrado' : 'abierto'}`} style={{ width: 15, height: 15, accentColor: C.orange, cursor: 'pointer' }} />
+                              <span style={{ fontSize: 12, fontWeight: 700, textTransform: 'capitalize', color: d.isOpen ? C.text : C.muted }}>{day}</span>
+                            </label>
+                            {d.isOpen ? (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                                <input type="time" value={d.open} onChange={e => handleSchedule(day, 'open', e.target.value)} title={`Apertura: ${day}`} aria-label={`Hora de apertura para ${day}`} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 6, padding: '3px 7px', fontSize: 11, color: C.text, colorScheme: 'dark' }} />
+                                <span style={{ fontSize: 10, color: C.muted }}>–</span>
+                                <input type="time" value={d.close} onChange={e => handleSchedule(day, 'close', e.target.value)} title={`Cierre: ${day}`} aria-label={`Hora de cierre para ${day}`} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 6, padding: '3px 7px', fontSize: 11, color: C.text, colorScheme: 'dark' }} />
+                              </div>
+                            ) : (
+                              <span style={{ fontSize: 9.5, fontWeight: 900, color: 'rgba(239,83,80,0.55)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Cerrado</span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </SectionBlock>
+                )}
+
+                {/* Media */}
+                <SectionBlock icon={Image} title="Imágenes / Multimedia" accent={C.cyan}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
+                    <FieldRow>
+                      <Field label="Tipo de archivo" id="mediaType">
+                        <select id="mediaType" name="mediaType" value={form.mediaType} onChange={handleChange} title="Tipo de archivo multimedia" aria-label="Tipo de archivo multimedia" style={{ ...inp, colorScheme: 'dark' }}>
+                          <option value="image">Imagen (JPG / PNG)</option>
+                          <option value="video">Video (MP4)</option>
+                        </select>
+                      </Field>
+                      <Field label="URL Flyer / Foto Principal" id="imageUrl" required>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <input id="imageUrl" name="imageUrl" required type="url" value={form.imageUrl} onChange={handleChange} placeholder="https://..." aria-required="true" style={inp} />
+                          <IconBtn icon={Eye} label="Previsualizar" color={C.cyan} bgHover="rgba(38,198,218,0.12)" onClick={() => form.imageUrl && setPreview({ url: form.imageUrl, type: form.mediaType ?? 'image' })} disabled={!form.imageUrl} size={38} />
+                        </div>
+                      </Field>
+                    </FieldRow>
+                    <Field label="URL Logo / Foto de Perfil (círculo)" id="profileImageUrl">
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <input id="profileImageUrl" name="profileImageUrl" type="url" value={form.profileImageUrl ?? ''} onChange={handleChange} placeholder="https://... (imagen cuadrada)" style={inp} />
+                        <IconBtn icon={Eye} label="Previsualizar logo" color={C.cyan} bgHover="rgba(38,198,218,0.12)" onClick={() => form.profileImageUrl && setPreview({ url: form.profileImageUrl, type: 'image' })} disabled={!form.profileImageUrl} size={38} />
+                      </div>
+                    </Field>
+                  </div>
+                </SectionBlock>
+
+                {/* ── LISTA DE PROMOCIONES MÚLTIPLES ── */}
+                <SectionBlock icon={Image} title="Promociones y Flyers Extras" accent={C.purple}>
+                  <p style={{ fontSize: 11, color: C.muted, marginBottom: 15 }}>
+                    Podés agregar múltiples imágenes o videos promocionales. Pegá la URL directa de <strong style={{ color: C.purple }}>imgur.com</strong> o similar.
+                  </p>
+
+                  {(form.promotions || []).map((promo, idx) => (
+                    <div key={promo.id} style={{ background: 'rgba(255,255,255,0.02)', border: `1px dashed ${C.border}`, borderRadius: 12, padding: 15, marginBottom: 12, position: 'relative' }}>
+                      <div style={{ position: 'absolute', top: 12, right: 12 }}>
+                        <IconBtn icon={Trash2} label="Eliminar promo" color={C.red} bgHover="rgba(239,83,80,0.15)" onClick={() => removePromotion(promo.id)} size={28} />
+                      </div>
+
+                      <div style={{ fontWeight: 800, fontSize: 11, color: C.purple, marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                        Promoción #{idx + 1}
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
+                        <FieldRow>
+                          <Field label="Tipo de archivo" id={`promoType_${promo.id}`}>
+                            <select id={`promoType_${promo.id}`} value={promo.mediaType} onChange={e => updatePromotion(promo.id, 'mediaType', e.target.value)} style={{ ...inp, colorScheme: 'dark' }}>
+                              <option value="image">Imagen (JPG / PNG)</option>
+                              <option value="video">Video (MP4)</option>
+                            </select>
+                          </Field>
+                          <Field label="URL de la Promoción" id={`promoUrl_${promo.id}`}>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                              <input id={`promoUrl_${promo.id}`} type="url" value={promo.url} onChange={e => updatePromotion(promo.id, 'url', e.target.value)} placeholder="https://i.imgur.com/..." style={inp} />
+                              <IconBtn icon={Eye} label="Previsualizar" color={C.purple} bgHover="rgba(157,111,255,0.12)" onClick={() => promo.url && setPreview({ url: promo.url, type: promo.mediaType })} disabled={!promo.url} size={38} />
+                            </div>
+                          </Field>
+                        </FieldRow>
+
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', padding: '10px 13px', borderRadius: 10, background: promo.active ? 'rgba(139,92,246,0.08)' : 'rgba(255,255,255,0.02)', border: `1px solid ${promo.active ? 'rgba(139,92,246,0.3)' : C.border}`, transition: 'all .2s' }}>
+                          <input type="checkbox" checked={promo.active} onChange={e => updatePromotion(promo.id, 'active', e.target.checked)} style={{ accentColor: C.purple, width: 16, height: 16, cursor: 'pointer' }} />
+                          <div>
+                            <div style={{ fontSize: 12.5, fontWeight: 800, color: promo.active ? C.purple : C.muted }}>Activar promoción</div>
+                            <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>Se mostrará al usuario al ingresar al sitio y dentro del evento.</div>
+                          </div>
+                        </label>
+                      </div>
+                    </div>
                   ))}
-                </select>
-              </div>
-              <div>
-                <label htmlFor="location" className={labelStyles}>Dirección Exacta</label>
-                <input id="location" required type="text" name="location" value={formData.location} onChange={handleChange} placeholder="Ej: 24 de Septiembre 1326" className={inputStyles} />
-              </div>
-            </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label htmlFor="date" className={labelStyles}>Fecha y Hora</label>
-                <input id="date" required type="datetime-local" name="date" value={formData.date} onChange={handleChange} className={inputStyles} />
-              </div>
-              <div>
-                <label htmlFor="musicType" className={labelStyles}>Tipo de Música</label>
-                <select id="musicType" name="musicType" value={formData.musicType} onChange={handleChange} className={inputStyles} style={{ colorScheme: 'dark' }}>
-                  <option value="Cuarteto">Cuarteto</option>
-                  <option value="Cumbia">Cumbia</option>
-                  <option value="Electrónica">Electrónica</option>
-                  <option value="Reggaeton">Reggaeton</option>
-                  <option value="Folklore">Folklore</option>
-                  <option value="Varios">Varios</option>
-                </select>
-              </div>
-            </div>
+                  <button
+                    type="button"
+                    onClick={addPromotion}
+                    style={{ width: '100%', padding: '10px', borderRadius: 10, background: 'rgba(157,111,255,0.1)', color: C.purple, border: `1px dashed rgba(157,111,255,0.3)`, fontWeight: 800, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, transition: 'all 0.2s' }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(157,111,255,0.15)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'rgba(157,111,255,0.1)'}
+                  >
+                    <Plus size={14} /> Agregar promoción
+                  </button>
+                </SectionBlock>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label htmlFor="mediaType" className={labelStyles}>Formato del Flyer</label>
-                <select id="mediaType" name="mediaType" value={formData.mediaType} onChange={handleChange} className={inputStyles} style={{ colorScheme: 'dark' }}>
-                  <option value="image">Imagen estática (JPG/PNG)</option>
-                  <option value="video">Video Animado (MP4)</option>
-                </select>
-              </div>
-              <div>
-                <label htmlFor="imageUrl" className={labelStyles}>Enlace del Archivo (URL)</label>
-                <input id="imageUrl" required type="url" name="imageUrl" value={formData.imageUrl} onChange={handleChange} placeholder="https://i.imgur.com/..." className={inputStyles} />
-              </div>
-            </div>
+                {/* Redes */}
+                <SectionBlock icon={Link2} title="Redes y Contacto" accent={C.purple}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 13 }}>
+                    {form.category === 'evento' && (
+                      <Field label="Link de Entradas (Passline, etc.)" id="ticketLink">
+                        <input id="ticketLink" name="ticketLink" type="url" value={form.ticketLink ?? ''} onChange={handleChange} placeholder="https://passline.com/..." style={inp} />
+                      </Field>
+                    )}
+                    <Field label={`Instagram${form.category === 'bar' ? ' *' : ''}`} id="instagram" required={form.category === 'bar'}>
+                      <input id="instagram" name="instagram" type="url" value={form.instagram ?? ''} onChange={handleChange} required={form.category === 'bar'} placeholder="https://instagram.com/..." style={inp} />
+                    </Field>
+                    <Field label="Facebook" id="facebook">
+                      <input id="facebook" name="facebook" type="url" value={form.facebook ?? ''} onChange={handleChange} placeholder="https://facebook.com/..." style={inp} />
+                    </Field>
+                    <Field label="Google Maps" id="mapsLink">
+                      <input id="mapsLink" name="mapsLink" type="url" value={form.mapsLink ?? ''} onChange={handleChange} placeholder="https://maps.google.com/..." style={inp} />
+                    </Field>
+                  </div>
+                </SectionBlock>
 
-            <div className="bg-night-900/50 p-4 rounded-xl border border-night-700 space-y-4">
-              <h3 className="text-sm font-bold text-brand-primary uppercase tracking-wider flex items-center gap-2">
-                <LinkIcon size={16} /> Enlaces y Redes (Opcional)
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label htmlFor="ticketLink" className={labelStyles}>Entradas (Passline, etc)</label>
-                  <input id="ticketLink" type="url" name="ticketLink" value={formData.ticketLink} onChange={handleChange} placeholder="https://..." className={inputStyles} />
-                </div>
-                <div>
-                  <label htmlFor="mapsLink" className={labelStyles}>Link de Ubicación (Google Maps Directo)</label>
-                  <input id="mapsLink" type="url" name="mapsLink" value={formData.mapsLink} onChange={handleChange} placeholder="https://maps.app.goo.gl/..." className={inputStyles} />
-                </div>
-                <div>
-                  <label htmlFor="instagram" className={labelStyles}>Instagram (Link al perfil)</label>
-                  <input id="instagram" type="url" name="instagram" value={formData.instagram} onChange={handleChange} placeholder="https://instagram.com/..." className={inputStyles} />
-                </div>
-                <div>
-                  <label htmlFor="facebook" className={labelStyles}>Facebook (Link al perfil)</label>
-                  <input id="facebook" type="url" name="facebook" value={formData.facebook} onChange={handleChange} placeholder="https://facebook.com/..." className={inputStyles} />
-                </div>
-              </div>
-            </div>
+                {/* WhatsApp */}
+                <SectionBlock icon={Phone} title="WhatsApp / Reservas" accent={C.green}>
+                  <Field label="Número de WhatsApp" id="phone">
+                    <input id="phone" name="phone" type="text" value={form.phone ?? ''} onChange={handleChange} disabled={sinNumero} required={!sinNumero} placeholder="5493810000000" aria-disabled={sinNumero} style={{ ...inp, opacity: sinNumero ? 0.38 : 1, cursor: sinNumero ? 'not-allowed' : 'auto', marginBottom: 10 }} />
+                  </Field>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 12, color: C.muted, userSelect: 'none' }}>
+                    <input type="checkbox" checked={sinNumero} onChange={e => { setSinNumero(e.target.checked); if (e.target.checked) setForm(p => ({ ...p, phone: '' })); }} title="Sin número de contacto" aria-label="Sin número de contacto" style={{ accentColor: C.green, width: 15, height: 15, cursor: 'pointer' }} />
+                    Sin número de contacto
+                  </label>
+                </SectionBlock>
 
-            <div className="bg-night-900/50 p-4 rounded-xl border border-night-700">
-              <label htmlFor="phone" className={labelStyles}>WhatsApp (Para reservas)</label>
-              <div className="flex flex-col gap-3 mt-2">
-                <input id="phone" type="text" name="phone" value={formData.phone} onChange={handleChange} placeholder="5493810000000" required={!sinNumero} disabled={sinNumero} className={`${inputStyles} ${sinNumero ? 'opacity-40 cursor-not-allowed bg-night-800' : ''}`} />
-                <label className="flex items-center gap-2 cursor-pointer select-none">
-                  <input type="checkbox" checked={sinNumero} onChange={(e) => { setSinNumero(e.target.checked); if (e.target.checked) setFormData(prev => ({ ...prev, phone: "" })); }} className="w-5 h-5 rounded border-night-700 text-brand-primary focus:ring-brand-primary bg-night-900" />
-                  <span className="text-sm font-medium text-gray-300">(x) El organizador no dejó número de contacto</span>
-                </label>
-              </div>
-            </div>
+                {/* Descripción */}
+                <SectionBlock icon={BookOpen} title={form.category === 'bar' ? 'Promociones y Extras' : 'Descripción del Evento'} accent={cat.accent}>
+                  <label htmlFor="descArea" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap' }}>
+                    {form.category === 'bar' ? 'Promociones y extras' : 'Descripción del evento'}
+                  </label>
+                  <textarea id="descArea" name="description" required rows={4} value={form.description ?? ''} onChange={handleChange} title={form.category === 'bar' ? 'Promociones y extras' : 'Descripción del evento'} aria-required="true" placeholder={form.category === 'bar' ? 'Ej: Happy Hour hasta las 21hs, 2x1 en Pintas...' : 'Descripción breve del evento, dresscode, info adicional...'} style={{ ...inp, resize: 'vertical', minHeight: 90 }} />
+                </SectionBlock>
+              </>
+            )}
 
-            <div>
-              <label htmlFor="description" className={labelStyles}>Descripción Corta</label>
-              <textarea id="description" required name="description" value={formData.description} onChange={handleChange} rows={5} className={`${inputStyles} resize-none`}></textarea>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-4 pt-4 border-t border-night-700">
-              <button type="submit" disabled={isSubmitting} className={`flex items-center gap-2 text-white px-6 py-3 rounded-xl font-medium transition-colors ${editingId ? 'bg-blue-600 hover:bg-blue-700' : 'bg-brand-primary hover:bg-brand-primary/90'} disabled:opacity-50`}>
-                <Save size={20} />
-                {isSubmitting ? 'Guardando...' : editingId ? 'Actualizar Evento' : 'Publicar Evento'}
+            {/* Submit bar */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 11, paddingTop: 10, borderTop: `1px solid ${C.border}` }}>
+              <button type="submit" disabled={isSubmitting}
+                title={editingId ? 'Guardar cambios' : 'Publicar ahora'}
+                aria-label={isSubmitting ? 'Guardando...' : editingId ? 'Guardar cambios' : 'Publicar ahora'}
+                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '11px 22px', borderRadius: 11, background: editingId ? `linear-gradient(135deg,${C.cyan},#0288d1)` : cat.gradient, color: '#fff', fontWeight: 800, fontSize: 13.5, border: 'none', cursor: isSubmitting ? 'not-allowed' : 'pointer', opacity: isSubmitting ? 0.7 : 1, boxShadow: '0 4px 18px rgba(0,0,0,0.4)', transition: 'opacity .2s' }}>
+                {isSubmitting ? <Loader2 size={16} style={{ animation: 'spin .8s linear infinite' }} /> : <Save size={16} />}
+                {isSubmitting ? 'Guardando...' : editingId ? 'Guardar Cambios' : 'Publicar Ahora'}
               </button>
-              {editingId && <button type="button" onClick={resetForm} className="text-gray-400 hover:text-white px-4 py-2 border border-transparent hover:border-night-700 rounded-lg transition-all">Cancelar</button>}
-              {successMessage && <div className="flex items-center gap-2 text-green-400 text-sm animate-pulse md:ml-auto w-full md:w-auto mt-2 md:mt-0"><CheckCircle size={18} /><span>{successMessage}</span></div>}
+              {editingId && (
+                <button type="button" onClick={resetForm} title="Cancelar" aria-label="Cancelar edición"
+                  style={{ padding: '11px 18px', borderRadius: 11, background: 'transparent', border: `1px solid ${C.border}`, color: C.muted, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+                  Cancelar
+                </button>
+              )}
+              <div role="status" aria-live="polite" style={{ marginLeft: 'auto' }}>
+                {successMsg && (
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: C.green, fontSize: 13, fontWeight: 700, animation: 'fadeIn .25s ease' }}>
+                    <CheckCircle2 size={15} /> {successMsg}
+                  </span>
+                )}
+              </div>
             </div>
           </form>
         </div>
 
-        {/* TABLA DE EVENTOS */}
-        <div className="bg-night-800 rounded-2xl border border-night-700 shadow-xl overflow-hidden">
-          <div className="p-6 border-b border-night-700 bg-night-900/50 flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <h2 className="text-xl font-bold flex items-center gap-2 whitespace-nowrap">
-              Eventos Publicados <span className="bg-night-700 text-xs px-2 py-1 rounded-full text-brand-primary font-mono">{filteredTableEvents.length}</span>
-            </h2>
-            <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
-              <div className="relative w-full sm:w-64">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 w-4 h-4 pointer-events-none" />
-                <input type="text" placeholder="Buscar joda, lugar..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-night-900 border border-night-600 rounded-lg pl-9 pr-4 py-2 text-sm text-gray-300 focus:outline-none focus:border-brand-primary transition-colors" />
-              </div>
-              <div className="flex items-center gap-2 w-full sm:w-auto">
-                <div className="relative flex-1 sm:w-48">
-                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 w-4 h-4 pointer-events-none" />
-                  <select aria-label="Buscar eventos por fecha" value={filterDate} onChange={(e) => setFilterDate(e.target.value)} className="w-full appearance-none bg-night-900 border border-night-600 rounded-lg pl-9 pr-8 py-2 text-sm text-gray-300 focus:outline-none focus:border-brand-primary cursor-pointer" style={{ colorScheme: 'dark' }}>
-                    {availableDates.map(date => <option key={date} value={date}>{formatShortDate(date)}</option>)}
-                  </select>
-                </div>
-                {(filterDate !== 'Todas' || searchTerm !== '') && <button onClick={() => { setFilterDate('Todas'); setSearchTerm(''); }} title="Limpiar filtros" className="p-2 bg-night-900 hover:bg-red-500/10 text-gray-400 hover:text-red-400 border border-night-600 rounded-lg transition-colors shrink-0"><FilterX size={18} /></button>}
-              </div>
+        {/* ════ TABLA DE PUBLICACIONES ════ */}
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 18, overflow: 'hidden' }}>
+
+          {/* Table toolbar */}
+          <div style={{ padding: '14px 18px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 11, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginRight: 'auto' }}>
+              <Hash size={15} style={{ color: C.purple }} />
+              <span style={{ fontWeight: 800, fontSize: 14.5 }}>Publicaciones Activas</span>
+              <span style={{ background: 'rgba(157,111,255,0.14)', color: C.purple, border: '1px solid rgba(157,111,255,0.25)', borderRadius: 99, padding: '2px 9px', fontSize: 10.5, fontWeight: 800 }}>
+                {loadingData ? '…' : filtered.length}
+              </span>
+            </div>
+
+            {/* Filter pills */}
+            <div role="group" aria-label="Filtrar por categoría" style={{ display: 'flex', gap: 5 }}>
+              {([
+                ['all',    'Todas',   C.purple],
+                ['evento', 'Eventos', C.pink  ],
+                ['bar',    'Bares',   C.orange],
+                ['dj',     'DJs',     C.indigo],
+              ] as const).map(([v, l, c]) => (
+                <button key={v} onClick={() => setFilterCat(v as any)}
+                  title={`Filtrar: ${l}`} aria-label={`Filtrar por ${l}`} aria-pressed={filterCat === v}
+                  style={{ padding: '5px 11px', borderRadius: 7, fontSize: 11, fontWeight: 800, border: 'none', cursor: 'pointer', background: filterCat === v ? `${c}1e` : 'rgba(255,255,255,0.04)', color: filterCat === v ? c : C.muted, outline: filterCat === v ? `1.5px solid ${c}44` : 'none', transition: 'all .15s' }}>
+                  {l}
+                </button>
+              ))}
+            </div>
+
+            {/* Search */}
+            <div style={{ position: 'relative' }}>
+              <Search size={12} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: C.muted, pointerEvents: 'none' }} />
+              <label htmlFor="tSearch" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap' }}>Buscar</label>
+              <input id="tSearch" type="search" placeholder="Buscar..." value={search} onChange={e => setSearch(e.target.value)} aria-label="Buscar publicaciones" style={{ ...inp, paddingLeft: 30, width: 175, fontSize: 12 }} />
             </div>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm text-gray-400">
-              <thead className="bg-night-900 text-gray-300 uppercase font-semibold text-xs border-b border-night-700">
-                <tr><th className="px-6 py-4">Evento</th><th className="px-6 py-4">Fecha</th><th className="px-6 py-4 hidden sm:table-cell">Formato</th><th className="px-6 py-4 text-right">Acciones</th></tr>
-              </thead>
-              <tbody className="divide-y divide-night-700">
-                {filteredTableEvents.map((evt) => (
-                  <tr key={evt.id} className="hover:bg-night-900/30 transition-colors">
-                    <td className="px-6 py-4"><div className="font-medium text-white">{evt.title}</div><div className="text-xs text-brand-primary mt-0.5">{evt.venue || evt.locality}</div></td>
-                    <td className="px-6 py-4 whitespace-nowrap">{evt.date ? formatShortDate(evt.date.split('T')[0]) : '-'}</td>
-                    <td className="px-6 py-4 hidden sm:table-cell"><span className={`border px-2 py-1 rounded text-xs ${evt.mediaType === 'video' ? 'bg-purple-900/30 text-purple-400 border-purple-800' : 'bg-night-900 text-gray-300 border-night-700'}`}>{evt.mediaType === 'video' ? 'Video' : 'Imagen'}</span></td>
-                    <td className="px-6 py-4 flex justify-end gap-1 sm:gap-3">
-                      <button onClick={() => handleDuplicate(evt)} className="p-2 text-green-400 hover:bg-green-400/10 rounded-lg transition-colors" title="Copiar datos para evento nuevo"><Copy size={18} /></button>
-                      <button onClick={() => handleEdit(evt)} className="p-2 text-blue-400 hover:bg-blue-400/10 rounded-lg transition-colors" title="Editar"><Edit size={18} /></button>
-                      <button onClick={() => handleDelete(evt.id)} className="p-2 text-red-400 hover:bg-red-400/10 rounded-lg transition-colors" title="Eliminar"><Trash2 size={18} /></button>
-                    </td>
+
+          {/* Loading / error / table */}
+          {loadingData ? (
+            <div style={{ padding: '50px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, color: C.muted }}>
+              <Loader2 size={26} style={{ animation: 'spin .8s linear infinite', color: C.purple }} />
+              <span style={{ fontSize: 13 }}>Cargando publicaciones desde Firestore…</span>
+            </div>
+          ) : dataError ? (
+            <div style={{ padding: '40px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, color: C.red, fontSize: 13 }}>
+              <AlertCircle size={26} />
+              {dataError}
+              <button type="button" onClick={fetchEvents} style={{ marginTop: 4, padding: '7px 16px', borderRadius: 8, background: 'rgba(239,83,80,0.1)', border: '1px solid rgba(239,83,80,0.25)', color: C.red, fontWeight: 700, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <RefreshCw size={13} /> Reintentar
+              </button>
+            </div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }} aria-label="Lista de publicaciones activas">
+                <thead>
+                  <tr style={{ background: 'rgba(255,255,255,0.018)' }}>
+                    {['Tipo','Título / Nombre','Detalle','Fecha','Acciones'].map(h => (
+                      <th key={h} scope="col" style={{ padding: '10px 15px', textAlign: 'left', fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em', color: C.muted, borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap' }}>
+                        {h}
+                      </th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {filtered.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} style={{ padding: '44px 0', textAlign: 'center', color: C.muted }}>
+                        <LayoutGrid size={26} style={{ margin: '0 auto 10px', opacity: 0.35, display: 'block' }} />
+                        <span style={{ fontSize: 13 }}>Sin resultados</span>
+                      </td>
+                    </tr>
+                  ) : filtered.map((ev, i) => (
+                    <tr key={ev.id}
+                      style={{ borderBottom: `1px solid ${C.border}`, background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.012)', transition: 'background .14s' }}
+                      onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.03)')}
+                      onMouseLeave={e => (e.currentTarget.style.background = i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.012)')}
+                    >
+                      <td style={{ padding: '12px 15px' }}><Chip category={ev.category} /></td>
+                      <td style={{ padding: '12px 15px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          {ev.imageUrl && <img src={ev.imageUrl} alt="" aria-hidden="true" style={{ width: 34, height: 34, borderRadius: 7, objectFit: 'cover', flexShrink: 0, background: C.surface }} onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />}
+                          <div>
+                            <div style={{ fontWeight: 700, color: C.text, fontSize: 13 }}>{ev.title}</div>
+                            <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+                              {ev.category === 'dj' ? ev.description : (ev.venue || ev.locality)}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      <td style={{ padding: '12px 15px', fontSize: 12, color: CAT[ev.category as keyof typeof CAT]?.accent ?? C.muted }}>
+                        {ev.category === 'bar' ? 'Semanal' : ev.category === 'dj' ? 'Ranking' : ev.locality}
+                      </td>
+                      <td style={{ padding: '12px 15px', whiteSpace: 'nowrap', color: C.muted, fontSize: 12 }}>
+                        {fmtDate(ev.date ?? '')}
+                      </td>
+                      <td style={{ padding: '12px 15px' }}>
+                        <div style={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
+                          <IconBtn icon={Eye}    label={`Ver imagen: ${ev.title}`}        color={C.purple} bgHover="rgba(157,111,255,0.12)" onClick={() => ev.imageUrl && setPreview({ url: ev.imageUrl, type: ev.mediaType ?? 'image' })} disabled={!ev.imageUrl} />
+                          <IconBtn icon={Copy}   label={`Duplicar: ${ev.title}`}          color={C.green}  bgHover="rgba(102,187,106,0.1)"  onClick={() => loadIntoForm(ev, false)} />
+                          <IconBtn icon={Edit2}  label={`Editar: ${ev.title}`}            color={C.cyan}   bgHover="rgba(38,198,218,0.1)"   onClick={() => loadIntoForm(ev, true)} />
+                          <IconBtn icon={Trash2} label={`Eliminar: ${ev.title}`}          color={C.red}    bgHover="rgba(239,83,80,0.1)"    onClick={() => handleDelete(ev.id, ev.title)} />
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
-      </div>
+      </main>
     </div>
   );
 }
