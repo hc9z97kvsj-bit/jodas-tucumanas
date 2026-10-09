@@ -124,7 +124,8 @@ function useEvents() {
 
         setEvents(
           all.filter(e => {
-            if (e.category === 'bar' || e.category === 'dj') return true;
+            if (e.category === 'dj') return false;
+            if (e.category === 'bar') return true;
             if (!e.date) return false;
             return new Date(e.date) >= cutoffDate;
           })
@@ -137,11 +138,7 @@ function useEvents() {
     })();
   }, []);
 
-  const updateEventLikes = useCallback((id: string) => {
-    setEvents(prev => prev.map(e => e.id === id ? { ...e, likes: (e.likes || 0) + 1 } : e));
-  }, []);
-
-  return { events, loading, updateEventLikes };
+  return { events, loading };
 }
 
 function useLikes(prefix: string) {
@@ -1170,10 +1167,9 @@ function EmptyState({ message, onClear }: { message: string; onClear?: () => voi
 const SELECT_CLS = 'w-full appearance-none bg-[#0e0e0e] border border-white/10 rounded-xl pl-10 pr-4 py-3 text-white text-sm focus:outline-none focus:border-[#8B5CF6]/50 transition-all cursor-pointer [color-scheme:dark] hover:border-white/20';
 
 export default function Home() {
-  const { events, loading, updateEventLikes } = useEvents();
+  const { events, loading } = useEvents();
   const visitCount = useVisitCount();
 
-  const { liked: djLikes,       toggleLike: toggleDjLike       } = useLikes('dj');
   const { liked: featuredLikes, toggleLike: toggleFeaturedLike } = useLikes('jt');
 
   const [activeTab,     setActiveTab]     = useState<Tab>('evento');
@@ -1193,20 +1189,18 @@ export default function Home() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [clearFilters]);
 
-  const handleLikeDJ = useCallback((id: string) => {
-    toggleDjLike(id, () => updateEventLikes(id));
-  }, [toggleDjLike, updateEventLikes]);
-
   const currentData = useMemo(() => events.filter(e => e.category === activeTab), [events, activeTab]);
+
+  const nightEvents = useMemo(() =>
+    events.filter(e => e.category === 'evento' && !!e.date)
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+      .slice(0, 3),
+    [events]);
 
   const topEventos = useMemo(() =>
     events.filter(e => e.category === 'evento' && Number(e.likes || 0) > 0)
       .sort((a, b) => Number(b.likes || 0) - Number(a.likes || 0))
       .slice(0, 3),
-    [events]);
-
-  const djsList = useMemo(() =>
-    events.filter(e => e.category === 'dj').sort((a, b) => Number(b.likes || 0) - Number(a.likes || 0)),
     [events]);
 
   const availableZones  = useMemo(() => { const z = currentData.map(e => e.locality).filter(Boolean) as string[]; return ['Todas', ...Array.from(new Set(z))]; }, [currentData]);
@@ -1328,9 +1322,34 @@ export default function Home() {
           <PromoStrip events={eventsWithPromos} />
         )}
 
-        {/* DJ Ranking */}
-        {activeTab === 'evento' && djsList.length > 0 && (
-          <DJRankingSection djsList={djsList} djLikes={djLikes} onLike={handleLikeDJ} />
+        {/* Agenda nocturna */}
+        {activeTab === 'evento' && nightEvents.length > 0 && !loading && !hasFilters && (
+          <section className="mb-24">
+            <div className="mb-8 flex items-end justify-between pb-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+              <div>
+                <div className="flex items-center gap-3 mb-1">
+                  <div style={{
+                    width: 8, height: 28, borderRadius: 4,
+                    background: 'linear-gradient(180deg,#8B5CF6,#EC4899)',
+                    boxShadow: '0 0 10px rgba(236,72,153,0.4)',
+                  }} />
+                  <h2 className="text-2xl sm:text-3xl font-black tracking-tight">
+                    La noche <span style={{ color: '#EC4899', textShadow: '0 0 20px rgba(236,72,153,0.5)' }}>tucumana</span>
+                  </h2>
+                </div>
+                <p className="text-white/30 text-sm mt-1 ml-5">Fiestas y recitales próximos para armar tu salida.</p>
+              </div>
+              <span className="hidden sm:flex items-center gap-2 text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full"
+                style={{ background: 'rgba(236,72,153,0.06)', color: 'rgba(236,72,153,0.75)', border: '1px solid rgba(236,72,153,0.18)' }}>
+                <Calendar size={11} /> Próximos eventos
+              </span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {nightEvents.map((event, index) => (
+                <EventCard key={event.id} event={event} index={index} />
+              ))}
+            </div>
+          </section>
         )}
 
         {/* ── Eventos Destacados — MEJORADO ── */}

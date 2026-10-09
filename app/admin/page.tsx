@@ -9,7 +9,7 @@ import Link from 'next/link';
 
 import {
   Plus, Save, Edit2, Trash2, LogOut, Copy, Search, RefreshCw,
-  Inbox, Beer, PartyPopper, Clock, Eye, X, Headphones, MapPin,
+  Inbox, Beer, PartyPopper, Clock, Eye, X, MapPin,
   LayoutGrid, Music, CalendarDays, Image, Link2, Phone,
   CheckCircle2, Loader2, Wand2, AlertCircle, Layers, BookOpen, FileText, BarChart3, Hash
 } from 'lucide-react';
@@ -34,7 +34,7 @@ interface Promotion {
 
 interface EventData {
   id: string;
-  category: 'evento' | 'bar' | 'dj';
+  category: 'evento' | 'bar';
   title: string;
   venue?: string;
   imageUrl: string;
@@ -122,7 +122,6 @@ const C = {
   pink:     '#e040fb',
   orange:   '#ff7043',
   amber:    '#ffb74d',
-  indigo:   '#7986cb',
   cyan:     '#26c6da',
   green:    '#66bb6a',
   red:      '#ef5350',
@@ -144,14 +143,6 @@ const CAT = {
     accent: C.orange,
     accentFaint: 'rgba(255,112,67,0.12)',
     accentBorder: 'rgba(255,112,67,0.28)',
-  },
-  dj: {
-    label: 'DJ / Artista',
-    Icon: Headphones,
-    gradient: `linear-gradient(135deg, ${C.indigo}, ${C.purple})`,
-    accent: C.purple,
-    accentFaint: 'rgba(157,111,255,0.12)',
-    accentBorder: 'rgba(157,111,255,0.28)',
   },
 } as const;
 
@@ -262,7 +253,7 @@ export default function AdminPage() {
 
   /* ── Table filters ── */
   const [search, setSearch] = useState('');
-  const [filterCat, setFilterCat] = useState<'all' | 'evento' | 'bar' | 'dj'>('all');
+  const [filterCat, setFilterCat] = useState<'all' | 'evento' | 'bar'>('all');
 
   /* ── Fetch Real desde Firestore ── */
   const fetchEvents = useCallback(async () => {
@@ -271,7 +262,16 @@ export default function AdminPage() {
     try {
       const q = query(collection(db, 'eventos'), orderBy('createdAt', 'desc'));
       const snapshot = await getDocs(q);
-      const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() })) as EventData[];
+      const data = snapshot.docs.map(d => {
+        const record = d.data();
+        return {
+          id: d.id,
+          ...record,
+          // Las publicaciones DJ que ya existían quedan visibles como eventos,
+          // sin borrar ni modificar documentos en Firestore.
+          category: record.category === 'bar' ? 'bar' : 'evento',
+        };
+      }) as EventData[];
       setEvents(data);
     } catch (error) {
       console.error(error);
@@ -300,7 +300,6 @@ export default function AdminPage() {
     total:   events.length,
     eventos: events.filter(e => e.category === 'evento').length,
     bares:   events.filter(e => e.category === 'bar').length,
-    djs:     events.filter(e => e.category === 'dj').length,
   }), [events]);
 
   const filtered = useMemo(() =>
@@ -551,12 +550,11 @@ export default function AdminPage() {
       <main style={{ maxWidth: 1120, margin: '0 auto', padding: '24px 18px 64px' }}>
 
         {/* ── STATS ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 11, marginBottom: 22 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 11, marginBottom: 22 }}>
           {([
             { label: 'Total',   value: stats.total,   icon: BarChart3,    color: C.purple },
             { label: 'Eventos', value: stats.eventos, icon: PartyPopper,  color: C.pink   },
             { label: 'Bares',   value: stats.bares,   icon: Beer,         color: C.orange },
-            { label: 'DJs',     value: stats.djs,     icon: Headphones,   color: C.indigo },
           ] as const).map(({ label, value, icon: Icon, color }) => (
             <div key={label} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 13, padding: '15px 17px', display: 'flex', alignItems: 'center', gap: 14 }}>
               <div style={{ width: 38, height: 38, borderRadius: 9, background: `${color}1a`, display: 'flex', alignItems: 'center', justifyContent: 'center', color, flexShrink: 0 }}>
@@ -599,8 +597,8 @@ export default function AdminPage() {
 
           {/* Category selector */}
           <div style={{ padding: '18px 22px 0' }}>
-            <div role="group" aria-label="Categoría de publicación" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 7, background: C.surface, padding: 5, borderRadius: 12, border: `1px solid ${C.border}` }}>
-              {(['evento','bar','dj'] as const).map(c => {
+            <div role="group" aria-label="Categoría de publicación" style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 7, background: C.surface, padding: 5, borderRadius: 12, border: `1px solid ${C.border}` }}>
+              {(['evento','bar'] as const).map(c => {
                 const cc = CAT[c];
                 const active = form.category === c;
                 const I = cc.Icon;
@@ -619,8 +617,7 @@ export default function AdminPage() {
           </div>
 
           {/* IG autofill */}
-          {form.category !== 'dj' && (
-            <div style={{ margin: '16px 22px 0', padding: '14px 16px', borderRadius: 12, background: CAT.evento.accentFaint, border: `1px solid ${CAT.evento.accentBorder}` }}>
+          <div style={{ margin: '16px 22px 0', padding: '14px 16px', borderRadius: 12, background: CAT.evento.accentFaint, border: `1px solid ${CAT.evento.accentBorder}` }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 10, fontSize: 12.5, fontWeight: 800, color: C.pink }}>
                 <Wand2 size={14} /> Autocompletar desde Instagram
               </div>
@@ -636,49 +633,11 @@ export default function AdminPage() {
               </div>
               {scrapeError && <p role="alert" style={{ margin: '8px 0 0', fontSize: 12, color: C.red, display: 'flex', alignItems: 'center', gap: 6 }}><AlertCircle size={13} />{scrapeError}</p>}
             </div>
-          )}
 
           {/* ── FORM ── */}
           <form onSubmit={handleSubmit} style={{ padding: '18px 22px 22px', display: 'flex', flexDirection: 'column', gap: 13 }}>
 
-            {/* ── DJ branch ── */}
-            {form.category === 'dj' ? (
-              <>
-                <SectionBlock icon={Headphones} title="Información del Artista" accent={C.indigo}>
-                  <FieldRow>
-                    <Field label="Nombre del DJ / Artista" id="title" required>
-                      <input id="title" name="title" required type="text" value={form.title} onChange={handleChange} placeholder="Ej: DJ Kairuz" aria-required="true" style={inp} />
-                    </Field>
-                    <Field label="Set / Álbum más conocido" id="description">
-                      <input id="description" name="description" type="text" value={form.description ?? ''} onChange={handleChange} placeholder="Ej: Enganchado RKT 2026" style={inp} />
-                    </Field>
-                  </FieldRow>
-                  <div style={{ marginTop: 13 }}>
-                    <Field label="Foto del DJ (URL)" id="imageUrl" required>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <input id="imageUrl" name="imageUrl" required type="url" value={form.imageUrl} onChange={handleChange} placeholder="https://..." aria-required="true" style={inp} />
-                        <IconBtn icon={Eye} label="Previsualizar foto" color={C.cyan} bgHover="rgba(38,198,218,0.12)" onClick={() => form.imageUrl && setPreview({ url: form.imageUrl, type: 'image' })} disabled={!form.imageUrl} size={38} />
-                      </div>
-                    </Field>
-                  </div>
-                </SectionBlock>
-                <SectionBlock icon={Link2} title="Redes y Contacto" accent={C.indigo}>
-                  <FieldRow>
-                    <Field label="YouTube (Set / Video)" id="youtube">
-                      <input id="youtube" name="youtube" type="url" value={form.youtube ?? ''} onChange={handleChange} placeholder="https://youtube.com/..." style={inp} />
-                    </Field>
-                    <Field label="Instagram" id="instagram">
-                      <input id="instagram" name="instagram" type="url" value={form.instagram ?? ''} onChange={handleChange} placeholder="https://instagram.com/..." style={inp} />
-                    </Field>
-                    <Field label="WhatsApp" id="phone">
-                      <input id="phone" name="phone" type="text" value={form.phone ?? ''} onChange={handleChange} placeholder="5493810000000" style={inp} />
-                    </Field>
-                  </FieldRow>
-                </SectionBlock>
-              </>
-            ) : (
-              /* ── Evento / Bar branch ── */
-              <>
+            <>
                 <SectionBlock icon={FileText} title="Información Básica" accent={cat.accent}>
                   <FieldRow>
                     <Field label={form.category === 'bar' ? 'Nombre del Bar / Local' : 'Nombre del Evento / Fiesta'} id="title" required>
@@ -905,8 +864,7 @@ export default function AdminPage() {
                   </label>
                   <textarea id="descArea" name="description" required rows={4} value={form.description ?? ''} onChange={handleChange} title={form.category === 'bar' ? 'Promociones y extras' : 'Descripción del evento'} aria-required="true" placeholder={form.category === 'bar' ? 'Ej: Happy Hour hasta las 21hs, 2x1 en Pintas...' : 'Descripción breve del evento, dresscode, info adicional...'} style={{ ...inp, resize: 'vertical', minHeight: 90 }} />
                 </SectionBlock>
-              </>
-            )}
+            </>
 
             {/* Submit bar */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 11, paddingTop: 10, borderTop: `1px solid ${C.border}` }}>
@@ -953,7 +911,6 @@ export default function AdminPage() {
                 ['all',    'Todas',   C.purple],
                 ['evento', 'Eventos', C.pink  ],
                 ['bar',    'Bares',   C.orange],
-                ['dj',     'DJs',     C.indigo],
               ] as const).map(([v, l, c]) => (
                 <button key={v} onClick={() => setFilterCat(v as any)}
                   title={`Filtrar: ${l}`} aria-label={`Filtrar por ${l}`} aria-pressed={filterCat === v}
@@ -1018,13 +975,13 @@ export default function AdminPage() {
                           <div>
                             <div style={{ fontWeight: 700, color: C.text, fontSize: 13 }}>{ev.title}</div>
                             <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
-                              {ev.category === 'dj' ? ev.description : (ev.venue || ev.locality)}
+                              {ev.venue || ev.locality}
                             </div>
                           </div>
                         </div>
                       </td>
                       <td style={{ padding: '12px 15px', fontSize: 12, color: CAT[ev.category as keyof typeof CAT]?.accent ?? C.muted }}>
-                        {ev.category === 'bar' ? 'Semanal' : ev.category === 'dj' ? 'Ranking' : ev.locality}
+                        {ev.category === 'bar' ? 'Semanal' : ev.locality}
                       </td>
                       <td style={{ padding: '12px 15px', whiteSpace: 'nowrap', color: C.muted, fontSize: 12 }}>
                         {fmtDate(ev.date ?? '')}
