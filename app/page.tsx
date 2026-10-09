@@ -633,6 +633,7 @@ function PromoStrip({ events }: { events: EventData[] }) {
   return (
     <section
       id="promos-section"
+      className="jt-promo-strip"
       style={{ marginBottom: 40, scrollMarginTop: 80 }}
     >
       {/* Section header */}
@@ -778,6 +779,7 @@ function PromoStrip({ events }: { events: EventData[] }) {
 function TabNav({ activeTab, onChange }: { activeTab: Tab; onChange: (tab: Tab) => void }) {
   return (
     <div
+      className="jt-tabs"
       style={{
         display: 'flex', alignItems: 'center', gap: 4,
         borderRadius: 99, padding: 4,
@@ -788,6 +790,7 @@ function TabNav({ activeTab, onChange }: { activeTab: Tab; onChange: (tab: Tab) 
         <button
           key={tab}
           onClick={() => onChange(tab)}
+          className={`jt-tabs__button ${activeTab === tab ? 'is-active' : ''}`}
           style={{
             position: 'relative', padding: '6px 16px', borderRadius: 99,
             fontSize: 11, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.07em',
@@ -1225,7 +1228,7 @@ export default function Home() {
   );
 
   return (
-    <main className="min-h-screen text-white font-sans overflow-x-hidden selection:bg-[#8B5CF6]/30" style={{ background: '#050505' }}>
+    <main className="jt-home min-h-screen text-white font-sans overflow-x-hidden selection:bg-[#8B5CF6]/30">
 
       <PromoModal events={eventsWithPromos} />
 
@@ -1236,14 +1239,14 @@ export default function Home() {
       </div>
 
       {/* ── Nav — 3-column grid; minmax(0,1fr) allows columns to shrink below content ── */}
-      <nav className="w-full sticky top-0 z-50 backdrop-blur-2xl" style={{ background: 'rgba(5,5,5,0.92)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+      <nav className="jt-nav w-full sticky top-0 z-50 backdrop-blur-2xl" style={{ background: 'rgba(5,5,5,0.92)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
         <div
-          className="max-w-7xl mx-auto px-4 sm:px-8 h-16"
+          className="jt-nav__inner max-w-7xl mx-auto px-4 sm:px-8 h-16"
           style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto minmax(0,1fr)', alignItems: 'center' }}
         >
           {/* Left: Logo */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-            <div style={{
+            <div className="jt-brand-icon" style={{
               width: 30, height: 30, borderRadius: 9, flexShrink: 0,
               background: 'linear-gradient(135deg,#8B5CF6,#EC4899)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -1296,26 +1299,37 @@ export default function Home() {
       </nav>
 
       {/* Hero */}
-      <div className="relative z-10 max-w-4xl mx-auto text-center mt-16 sm:mt-24 mb-16 px-4">
+      <div className="jt-hero relative z-10 max-w-4xl mx-auto text-center mt-16 sm:mt-24 mb-16 px-4">
         <AnimatePresence mode="wait">
           <motion.div key={activeTab} initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -16 }} transition={{ duration: 0.35 }}>
-            <h1 className="text-4xl sm:text-6xl md:text-7xl font-black mb-6 tracking-tight leading-[1.05]">
+            <div className="jt-hero__eyebrow">
+              <span className="jt-hero__pulse" />
+              TUCUMÁN <span aria-hidden="true">/</span> PLANES PARA DESCUBRIR
+            </div>
+            <h1 className="jt-hero__title text-4xl sm:text-6xl md:text-7xl font-black mb-6 tracking-tight leading-[1.05]">
               {activeTab === 'evento' ? (
                 <>La agenda <span style={{ color: '#8B5CF6', textShadow: '0 0 40px rgba(139,92,246,0.5)' }}>cultural</span> y nocturna<br className="hidden sm:block" /> de Tucumán.</>
               ) : (
                 <>Directorio <span style={{ color: '#EC4899', textShadow: '0 0 40px rgba(236,72,153,0.5)' }}>exclusivo</span> de bares<br className="hidden sm:block" /> y gastronomía.</>
               )}
             </h1>
-            <p className="text-white/35 text-sm sm:text-base max-w-lg mx-auto font-medium leading-relaxed">
+            <p className="jt-hero__description text-white/35 text-sm sm:text-base max-w-lg mx-auto font-medium leading-relaxed">
               {activeTab === 'evento'
                 ? 'Encontrá los mejores eventos, recitales y fiestas. Filtrá por zona, género y fecha.'
                 : 'Las mejores cervecerías, restobares y puntos de encuentro de la ciudad.'}
             </p>
+            <div className="jt-hero__actions">
+              <Link href="#cartelera" className="jt-hero__cta">
+                {activeTab === 'evento' ? 'Explorar eventos' : 'Descubrir bares'}
+                <ArrowUpRight size={16} />
+              </Link>
+              <span className="jt-hero__hint"><Zap size={13} /> Tucumán, de noche y de día</span>
+            </div>
           </motion.div>
         </AnimatePresence>
       </div>
 
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-8">
+      <div className="jt-home-content relative z-10 max-w-7xl mx-auto px-4 sm:px-8">
 
         {/* ── Promos Strip — siempre visible, ancla del modal ── */}
         {!loading && eventsWithPromos.length > 0 && (
@@ -1324,8 +1338,8 @@ export default function Home() {
 
         {/* Agenda nocturna */}
         {activeTab === 'evento' && nightEvents.length > 0 && !loading && !hasFilters && (
-          <section className="mb-24">
-            <div className="mb-8 flex items-end justify-between pb-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+          <section className="jt-section jt-night-section mb-24">
+            <div className="jt-section-heading mb-8 flex items-end justify-between pb-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
               <div>
                 <div className="flex items-center gap-3 mb-1">
                   <div style={{
@@ -1354,8 +1368,8 @@ export default function Home() {
 
         {/* ── Eventos Destacados — MEJORADO ── */}
         {activeTab === 'evento' && topEventos.length > 0 && !loading && !hasFilters && (
-          <section className="mb-24">
-            <div className="mb-8 flex items-end justify-between pb-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+          <section className="jt-section jt-featured-section mb-24">
+            <div className="jt-section-heading mb-8 flex items-end justify-between pb-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
               <div>
                 <div className="flex items-center gap-3 mb-1">
                   <div style={{
@@ -1383,7 +1397,7 @@ export default function Home() {
         )}
 
         {/* Filtros */}
-        <div className="p-4 sm:p-5 rounded-2xl mb-12 flex flex-col lg:flex-row gap-4 items-center justify-between"
+        <div className="jt-filters p-4 sm:p-5 rounded-2xl mb-12 flex flex-col lg:flex-row gap-4 items-center justify-between"
           style={{ background: 'rgba(14,14,14,0.6)', border: '1px solid rgba(255,255,255,0.07)', backdropFilter: 'blur(16px)' }}>
           <div className="flex items-center gap-2 text-white/30 font-black uppercase tracking-widest text-[10px] shrink-0">
             <Filter className="w-3.5 h-3.5" /><span>Filtros</span>
@@ -1427,7 +1441,7 @@ export default function Home() {
         </div>
 
         {/* Encabezado cartelera */}
-        <div className="mb-6 flex items-end justify-between pb-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+        <div id="cartelera" className="jt-listing-heading mb-6 flex items-end justify-between pb-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
           <h2 className="text-xl sm:text-2xl font-black tracking-tight">
             {activeTab === 'evento' ? 'Cartelera General' : 'Directorio Gastronómico'}
           </h2>
@@ -1448,7 +1462,7 @@ export default function Home() {
         ) : filteredEvents.length === 0 ? (
           <EmptyState message="No se encontraron resultados con los filtros actuales." onClear={clearFilters} />
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-20">
+          <div className="jt-event-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-20">
             {filteredEvents.map((evt, i) => (
               <EventCard key={evt.id} event={evt} index={i} />
             ))}
@@ -1457,7 +1471,7 @@ export default function Home() {
       </div>
 
       {/* Footer */}
-      <footer className="max-w-7xl mx-auto pt-8 pb-12 flex flex-col md:flex-row items-center justify-between gap-5 text-xs px-4 sm:px-8 relative z-10"
+      <footer className="jt-footer max-w-7xl mx-auto pt-8 pb-12 flex flex-col md:flex-row items-center justify-between gap-5 text-xs px-4 sm:px-8 relative z-10"
         style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
         <p className="text-white/30 font-medium tracking-wide">
           © {new Date().getFullYear()} Jodas Tucumanas. Todos los derechos reservados.
