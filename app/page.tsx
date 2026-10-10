@@ -1242,12 +1242,6 @@ export default function Home() {
 
       <PromoModal events={eventsWithPromos} />
 
-      {/* Background glows */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 0 }}>
-        <div className="absolute top-[-20%] left-[-10%] w-[60vw] h-[60vw] rounded-full opacity-[0.03]" style={{ background: 'radial-gradient(circle,#8B5CF6,transparent 70%)', filter: 'blur(60px)' }} />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[50vw] h-[50vw] rounded-full opacity-[0.025]" style={{ background: 'radial-gradient(circle,#EC4899,transparent 70%)', filter: 'blur(60px)' }} />
-      </div>
-
       {/* ── Nav — 3-column grid; minmax(0,1fr) allows columns to shrink below content ── */}
       <nav className="jt-nav w-full sticky top-0 z-50 backdrop-blur-2xl" style={{ background: 'rgba(5,5,5,0.92)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
         <div

@@ -150,7 +150,7 @@
 /* Homepage refresh: futuristic dark palette, tactile controls and mobile-first spacing. */
 :root {
   color-scheme: dark;
-  --jt-bg: #070711;
+  --jt-bg: #08080d;
   --jt-panel: rgba(16, 15, 29, 0.78);
   --jt-line: rgba(190, 175, 255, 0.13);
   --jt-violet: #a78bfa;
@@ -164,45 +164,23 @@ html {
 }
 
 body {
-  background: var(--jt-bg);
+  background: #08080d;
 }
 
 .jt-home {
   --jt-content-width: 1320px;
   position: relative;
   isolation: isolate;
-  background:
-    radial-gradient(ellipse at 50% -12%, rgba(124, 58, 237, 0.2), transparent 45rem),
-    radial-gradient(ellipse at 100% 52%, rgba(14, 165, 233, 0.08), transparent 35rem),
-    linear-gradient(180deg, #090814 0%, #070711 47%, #08060e 100%);
+  background-color: #08080d;
+  background-image: none;
 }
 
 .jt-home::before {
-  position: fixed;
-  z-index: -1;
-  inset: 0;
-  content: "";
-  pointer-events: none;
-  opacity: 0.2;
-  background-image:
-    linear-gradient(rgba(190, 175, 255, 0.055) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(190, 175, 255, 0.055) 1px, transparent 1px);
-  background-size: 56px 56px;
-  mask-image: linear-gradient(to bottom, black, transparent 88%);
+  display: none;
 }
 
 .jt-home::after {
-  position: absolute;
-  z-index: -1;
-  top: 300px;
-  left: -220px;
-  width: 430px;
-  height: 430px;
-  border-radius: 50%;
-  content: "";
-  pointer-events: none;
-  background: rgba(124, 58, 237, 0.14);
-  filter: blur(110px);
+  display: none;
 }
 
 .jt-nav {
