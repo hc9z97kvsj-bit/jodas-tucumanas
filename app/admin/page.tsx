@@ -1,14 +1,14 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc, deleteDoc, query, orderBy } from 'firebase/firestore';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { db, auth } from '@/lib/firebase';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
 import {
-  Plus, Save, Edit2, Trash2, LogOut, Copy, Search, RefreshCw,
+  Plus, Save, Edit2, Trash2, LogOut, Search, RefreshCw,
   Inbox, Beer, PartyPopper, Clock, Eye, X, MapPin,
   LayoutGrid, Music, CalendarDays, Image, Link2, Phone,
   CheckCircle2, Loader2, Wand2, AlertCircle, Layers, BookOpen, FileText, BarChart3, Hash
@@ -253,7 +253,9 @@ export default function AdminPage() {
 
   /* ── Table filters ── */
   const [search, setSearch] = useState('');
+  const [formSearch, setFormSearch] = useState('');
   const [filterCat, setFilterCat] = useState<'all' | 'evento' | 'bar'>('all');
+  const [mediaError, setMediaError] = useState('');
 
   /* ── Fetch Real desde Firestore ── */
   const fetchEvents = useCallback(async () => {
@@ -310,6 +312,25 @@ export default function AdminPage() {
     }),
   [events, filterCat, search]);
 
+  const formSearchResults = useMemo(() => {
+    const terms = formSearch.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
+    if (!terms.length) return [];
+    return events
+      .filter(ev => {
+        const haystack = [
+          ev.title, ev.venue, ev.locality, ev.location, ev.musicType,
+          ev.phone, ev.instagram, ev.facebook, ev.youtube, ev.mapsLink,
+        ].filter(Boolean).join(' ').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase();
+        return terms.every(term => haystack.includes(term.normalize('NFD').replace(/[\u0300-\u036f]/g, '')));
+      })
+      .slice(0, 10);
+  }, [events, formSearch]);
+
+  const selectedRecord = useMemo(
+    () => editingId ? events.find(ev => ev.id === editingId) ?? null : null,
+    [editingId, events],
+  );
+
   const currentCat = (form.category as keyof typeof CAT) in CAT ? form.category as keyof typeof CAT : 'evento';
   const cat = CAT[currentCat];
 
@@ -317,7 +338,14 @@ export default function AdminPage() {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     const clean = (name === 'imageUrl' || name === 'profileImageUrl') ? value.replace(/\[\/?img\]/gi, '').trim() : value;
-    setForm(p => ({ ...p, [name]: clean }));
+    if (name === 'imageUrl') {
+      const path = clean.toLowerCase().split(/[?#]/, 1)[0];
+      const mediaType = /\.(mp4|m4v|webm|mov|ogv)$/.test(path) ? 'video' : 'image';
+      setForm(p => ({ ...p, imageUrl: clean, mediaType }));
+      setMediaError('');
+    } else {
+      setForm(p => ({ ...p, [name]: clean }));
+    }
   };
 
   const handleSchedule = (day: string, field: string, value: string | boolean) => {
@@ -353,6 +381,9 @@ export default function AdminPage() {
   const resetForm = () => {
     setForm(EMPTY_FORM);
     setEditingId(null);
+    setFormSearch('');
+    setMediaError('');
+    setSuccessMsg('');
     setSinNumero(false);
     setShowLoc2(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -360,58 +391,49 @@ export default function AdminPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSubmitting(true);
-    try {
-      // Limpiamos los campos legacy por las dudas
-      const { promoUrl, promoMediaType, promoActive, ...cleanedForm } = form as any;
+    if (!editingId || !events.some(event => event.id === editingId)) {
+      setMediaError('Primero buscá y seleccioná una ficha de la base de datos.');
+      return;
+    }
+    if (!form.imageUrl.trim()) {
+      setMediaError('Pegá el enlace del flyer o video antes de guardar.');
+      return;
+    }
 
-      const payload = {
-        ...cleanedForm,
-        phone: sinNumero ? '' : form.phone,
-        date: form.category !== 'evento' ? '' : form.date,
-        location2: showLoc2 ? form.location2 : '',
-        locality2: showLoc2 ? form.locality2 : '',
-        phone2: showLoc2 ? form.phone2 : '',
+    setIsSubmitting(true);
+    setMediaError('');
+    try {
+      const mediaUpdate = {
+        imageUrl: form.imageUrl.trim(),
+        mediaType: form.mediaType || 'image',
       };
-      
-      if (editingId) {
-        await updateDoc(doc(db, 'eventos', editingId), payload);
-        setSuccessMsg('Actualizado correctamente');
-      } else {
-        const payloadWithDate = { ...payload, createdAt: new Date().toISOString() };
-        await addDoc(collection(db, 'eventos'), payloadWithDate);
-        setSuccessMsg('Publicado con éxito');
-      }
-      
-      resetForm();
-      fetchEvents();
+      await updateDoc(doc(db, 'eventos', editingId), mediaUpdate);
+      setEvents(current => current.map(event =>
+        event.id === editingId ? { ...event, ...mediaUpdate } : event
+      ));
+      setForm(current => ({ ...current, ...mediaUpdate }));
+      setSuccessMsg(`Flyer/video actualizado para “${events.find(event => event.id === editingId)?.title ?? 'la ficha'}”.`);
       setTimeout(() => setSuccessMsg(''), 4000);
     } catch (err) {
-      alert('Error al guardar. Revisá la consola.');
+      setMediaError('No se pudo actualizar el flyer o video. Revisá tu conexión e intentá otra vez.');
       console.error(err);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // Carga inteligente: si el evento es viejo y usaba promoUrl, lo convierte a la nueva lista
-  const loadIntoForm = (ev: EventData, keep: boolean) => {
-    const { id, createdAt, ...rest } = ev;
-    
-    let mappedPromos = ev.promotions || [];
-    if (!ev.promotions && ev.promoUrl) {
-      mappedPromos = [{
-        id: Date.now().toString(),
-        url: ev.promoUrl,
-        mediaType: ev.promoMediaType || 'image',
-        active: ev.promoActive !== false
-      }];
-    }
-
-    setForm({ ...EMPTY_FORM, ...rest, promotions: mappedPromos });
-    setEditingId(keep ? id : null);
-    setSinNumero(!ev.phone || ev.phone.trim() === '');
-    setShowLoc2(!!ev.location2);
+  const loadIntoForm = (ev: EventData) => {
+    const { id, ...rest } = ev;
+    setForm({
+      ...EMPTY_FORM,
+      ...rest,
+      imageUrl: '',
+      mediaType: ev.mediaType || 'image',
+    });
+    setEditingId(id);
+    setFormSearch('');
+    setMediaError('');
+    setSuccessMsg('');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -460,6 +482,32 @@ export default function AdminPage() {
     } catch { return d; }
   };
 
+  const fmtDateTime = (d: string) => {
+    if (!d) return '—';
+    const date = new Date(d);
+    if (Number.isNaN(date.getTime())) return fmtDate(d);
+    return new Intl.DateTimeFormat('es-AR', {
+      day: '2-digit', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+    }).format(date);
+  };
+
+  const selectedFacts = selectedRecord ? [
+    { label: 'Nombre de fiesta', value: selectedRecord.title },
+    { label: 'Lugar / boliche', value: selectedRecord.venue ?? '' },
+    { label: 'Fecha', value: selectedRecord.category === 'bar' ? 'Horarios semanales' : fmtDateTime(selectedRecord.date ?? '') },
+    { label: 'Dirección', value: [selectedRecord.location, selectedRecord.locality].filter(Boolean).join(' · ') },
+    { label: 'Género / tipo', value: selectedRecord.musicType ?? '' },
+    { label: 'WhatsApp', value: selectedRecord.phone ?? '' },
+    { label: 'WhatsApp sucursal 2', value: selectedRecord.phone2 ?? '' },
+    { label: 'Instagram', value: selectedRecord.instagram ?? '' },
+    { label: 'Facebook', value: selectedRecord.facebook ?? '' },
+    { label: 'YouTube', value: selectedRecord.youtube ?? '' },
+    { label: 'Google Maps', value: selectedRecord.mapsLink ?? '' },
+    { label: 'Link de entradas', value: selectedRecord.ticketLink ?? '' },
+    { label: 'Segunda dirección', value: [selectedRecord.location2, selectedRecord.locality2].filter(Boolean).join(' · ') },
+  ].filter(item => item.value && item.value !== '—') : [];
+
   /* ══════════════════════════════════════════════════════
      LOADING / AUTH
   ══════════════════════════════════════════════════════ */
@@ -487,6 +535,8 @@ export default function AdminPage() {
         input[type=datetime-local]::-webkit-calendar-picker-indicator{filter:invert(.6)}
         ::placeholder{color:rgba(255,255,255,0.22)}
         select option{background:${C.card}}
+        .admin-media-facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+        @media(max-width:640px){.admin-media-facts{grid-template-columns:1fr}}
         ::-webkit-scrollbar{width:5px;height:5px}
         ::-webkit-scrollbar-track{background:transparent}
         ::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:99px}
@@ -571,8 +621,157 @@ export default function AdminPage() {
           ))}
         </div>
 
-        {/* ════ FORM CARD ════ */}
-        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 18, marginBottom: 18 }}>
+        {/* ════ BUSCADOR Y ACTUALIZADOR DE MULTIMEDIA ════ */}
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 18, marginBottom: 18, overflow: 'hidden' }}>
+          <div style={{ padding: '16px 22px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ width: 34, height: 34, borderRadius: 10, background: 'rgba(157,111,255,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.purple }}>
+                <Search size={16} />
+              </div>
+              <div>
+                <div style={{ fontWeight: 800, fontSize: 14.5, color: C.text }}>Buscar ficha en la base de datos</div>
+                <div style={{ fontSize: 11, color: C.muted }}>Los datos se cargan desde Firestore; solo vas a cambiar el flyer o video.</div>
+              </div>
+            </div>
+            {selectedRecord && (
+              <button type="button" onClick={resetForm} title="Elegir otra ficha" aria-label="Elegir otra ficha"
+                style={{ padding: '7px 12px', borderRadius: 9, background: 'rgba(255,255,255,0.04)', border: `1px solid ${C.border}`, color: C.muted2, fontSize: 11, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                Cambiar ficha
+              </button>
+            )}
+          </div>
+
+          {!selectedRecord ? (
+            <div style={{ padding: 20 }}>
+              <label htmlFor="databaseSearch" style={{ display: 'block', marginBottom: 8, fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: C.muted }}>
+                Nombre de fiesta, boliche, dirección o localidad
+              </label>
+              <div style={{ position: 'relative' }}>
+                <Search size={15} style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', color: C.purple, pointerEvents: 'none' }} />
+                <input
+                  id="databaseSearch"
+                  type="search"
+                  value={formSearch}
+                  onChange={e => setFormSearch(e.target.value)}
+                  placeholder="Ej.: Serna, Yerba Buena, San Martín..."
+                  aria-label="Buscar fiestas y lugares en Firestore"
+                  style={{ ...inp, padding: '12px 14px 12px 40px', fontSize: 13 }}
+                />
+              </div>
+
+              {loadingData ? (
+                <div style={{ padding: '25px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 9, color: C.muted, fontSize: 12 }}>
+                  <Loader2 size={16} style={{ animation: 'spin .8s linear infinite', color: C.purple }} /> Cargando fichas guardadas…
+                </div>
+              ) : dataError ? (
+                <p role="alert" style={{ margin: '14px 0 0', color: C.red, fontSize: 12 }}>{dataError}</p>
+              ) : formSearch.trim().length < 2 ? (
+                <p style={{ margin: '11px 2px 0', color: C.muted, fontSize: 11.5 }}>
+                  Escribí al menos 2 caracteres para buscar entre {events.length} fichas.
+                </p>
+              ) : formSearchResults.length === 0 ? (
+                <div style={{ marginTop: 14, padding: 16, borderRadius: 10, background: 'rgba(255,255,255,0.025)', border: `1px solid ${C.border}`, color: C.muted2, fontSize: 12 }}>
+                  No encontramos una ficha con ese dato. Este formulario actualiza fichas existentes; no crea publicaciones nuevas.
+                </div>
+              ) : (
+                <div role="listbox" aria-label="Resultados de la búsqueda" style={{ display: 'flex', flexDirection: 'column', gap: 7, marginTop: 14 }}>
+                  {formSearchResults.map(ev => (
+                    <button
+                      key={ev.id}
+                      type="button"
+                      role="option"
+                      aria-selected={false}
+                      onClick={() => loadIntoForm(ev)}
+                      style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '11px 13px', textAlign: 'left', borderRadius: 11, background: 'rgba(255,255,255,0.025)', border: `1px solid ${C.border}`, color: C.text, cursor: 'pointer', transition: 'border-color .15s,background .15s' }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(157,111,255,0.42)'; e.currentTarget.style.background = 'rgba(157,111,255,0.06)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.background = 'rgba(255,255,255,0.025)'; }}
+                    >
+                      {ev.imageUrl ? (
+                        <img src={ev.imageUrl} alt="" aria-hidden="true" style={{ width: 42, height: 42, borderRadius: 9, objectFit: 'cover', flexShrink: 0, background: C.surface }} />
+                      ) : (
+                        <div aria-hidden="true" style={{ width: 42, height: 42, borderRadius: 9, flexShrink: 0, display: 'grid', placeItems: 'center', color: C.purple, background: 'rgba(157,111,255,0.1)' }}>
+                          {ev.category === 'bar' ? <Beer size={17} /> : <PartyPopper size={17} />}
+                        </div>
+                      )}
+                      <span style={{ minWidth: 0, flex: 1 }}>
+                        <span style={{ display: 'block', overflow: 'hidden', color: C.text, fontSize: 12.5, fontWeight: 800, textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.title}</span>
+                        <span style={{ display: 'block', overflow: 'hidden', marginTop: 3, color: C.muted, fontSize: 11, textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {[ev.venue, ev.locality, ev.location].filter(Boolean).join(' · ')}
+                        </span>
+                      </span>
+                      <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5, flexShrink: 0 }}>
+                        <Chip category={ev.category} />
+                        <span style={{ color: C.muted, fontSize: 10 }}>{ev.category === 'bar' ? 'Bar' : fmtDate(ev.date ?? '')}</span>
+                      </span>
+                    </button>
+                  ))}
+                  <span style={{ color: C.muted, fontSize: 10.5, padding: '2px 3px' }}>Mostrando hasta 10 coincidencias. Afiná la búsqueda si no aparece la ficha.</span>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div style={{ padding: 20 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14, padding: 14, borderRadius: 12, background: 'rgba(157,111,255,0.055)', border: '1px solid rgba(157,111,255,0.16)' }}>
+                {selectedRecord.imageUrl ? (
+                  <img src={selectedRecord.imageUrl} alt="" aria-hidden="true" style={{ width: 52, height: 64, borderRadius: 8, objectFit: 'cover', flexShrink: 0, background: C.surface }} />
+                ) : (
+                  <div aria-hidden="true" style={{ width: 52, height: 64, borderRadius: 8, flexShrink: 0, display: 'grid', placeItems: 'center', color: C.purple, background: C.surface }}>
+                    {selectedRecord.category === 'bar' ? <Beer size={19} /> : <PartyPopper size={19} />}
+                  </div>
+                )}
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 5 }}>
+                    <Chip category={selectedRecord.category} />
+                    <span style={{ color: C.green, fontSize: 10, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase' }}>Ficha cargada desde Firestore</span>
+                  </div>
+                  <div style={{ color: C.text, fontSize: 15, fontWeight: 900, overflowWrap: 'anywhere' }}>{selectedRecord.title}</div>
+                  <div style={{ marginTop: 3, color: C.muted2, fontSize: 11.5 }}>{selectedRecord.venue || selectedRecord.locality || 'Sin lugar especificado'}</div>
+                </div>
+                {selectedRecord.imageUrl && (
+                  <IconBtn icon={Eye} label="Ver flyer o video actual" color={C.cyan} bgHover="rgba(38,198,218,0.12)" onClick={() => setPreview({ url: selectedRecord.imageUrl, type: selectedRecord.mediaType ?? 'image' })} size={34} />
+                )}
+              </div>
+
+              <div className="admin-media-facts" style={{ gap: 8, marginBottom: 18 }}>
+                {selectedFacts.map(fact => (
+                  <div key={fact.label} style={{ minWidth: 0, padding: '10px 12px', borderRadius: 9, background: 'rgba(255,255,255,0.022)', border: `1px solid ${C.border}` }}>
+                    <div style={{ marginBottom: 4, color: C.muted, fontSize: 9, fontWeight: 800, letterSpacing: '0.09em', textTransform: 'uppercase' }}>{fact.label}</div>
+                    <div style={{ color: C.muted2, fontSize: 11.5, lineHeight: 1.45, overflowWrap: 'anywhere' }}>{fact.value}</div>
+                  </div>
+                ))}
+                {selectedFacts.length === 0 && <div style={{ color: C.muted, fontSize: 12 }}>La ficha no tiene otros datos guardados.</div>}
+              </div>
+
+              <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingTop: 16, borderTop: `1px solid ${C.border}` }}>
+                <Field label="Link nuevo del flyer o video" id="databaseMediaUrl" required>
+                  <input id="databaseMediaUrl" name="imageUrl" type="url" required value={form.imageUrl} onChange={handleChange} placeholder="Pegá una URL directa del flyer o video…" aria-required="true" style={{ ...inp, minHeight: 44 }} />
+                </Field>
+                <span style={{ marginTop: -5, color: C.muted, fontSize: 10.5 }}>
+                  El tipo se detecta automáticamente por la extensión del enlace (por ejemplo, .mp4 para video).
+                </span>
+
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '10px 12px', borderRadius: 9, color: C.muted2, background: 'rgba(38,198,218,0.05)', border: '1px solid rgba(38,198,218,0.12)', fontSize: 11, lineHeight: 1.5 }}>
+                  <CheckCircle2 size={14} style={{ flexShrink: 0, marginTop: 1, color: C.cyan }} />
+                  Al guardar solo se actualizarán <strong style={{ color: C.text }}>el link y el tipo de multimedia</strong>. Nombre, fecha, dirección y contactos permanecen como están en la base.
+                </div>
+
+                {mediaError && <p role="alert" style={{ margin: 0, color: C.red, fontSize: 12 }}>{mediaError}</p>}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                  <button type="submit" disabled={isSubmitting || !form.imageUrl.trim()}
+                    title="Guardar nuevo flyer o video"
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 17px', borderRadius: 10, background: `linear-gradient(135deg,${C.purple},${C.pink})`, color: '#fff', fontWeight: 800, fontSize: 12.5, border: 'none', cursor: isSubmitting || !form.imageUrl.trim() ? 'not-allowed' : 'pointer', opacity: isSubmitting || !form.imageUrl.trim() ? 0.55 : 1, boxShadow: '0 4px 18px rgba(0,0,0,0.35)' }}>
+                    {isSubmitting ? <Loader2 size={15} style={{ animation: 'spin .8s linear infinite' }} /> : <Save size={15} />}
+                    {isSubmitting ? 'Guardando…' : 'Actualizar flyer / video'}
+                  </button>
+                  {successMsg && <span role="status" style={{ display: 'flex', alignItems: 'center', gap: 6, color: C.green, fontSize: 12, fontWeight: 700 }}><CheckCircle2 size={14} />{successMsg}</span>}
+                </div>
+              </form>
+            </div>
+          )}
+        </div>
+
+        {/* Formulario anterior, conservado oculto para mantener compatibilidad visual. */}
+        <div hidden aria-hidden="true" style={{ display: 'none', background: C.card, border: `1px solid ${C.border}`, borderRadius: 18, marginBottom: 18 }}>
 
           {/* Form header */}
           <div style={{ padding: '16px 22px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -989,8 +1188,7 @@ export default function AdminPage() {
                       <td style={{ padding: '12px 15px' }}>
                         <div style={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
                           <IconBtn icon={Eye}    label={`Ver imagen: ${ev.title}`}        color={C.purple} bgHover="rgba(157,111,255,0.12)" onClick={() => ev.imageUrl && setPreview({ url: ev.imageUrl, type: ev.mediaType ?? 'image' })} disabled={!ev.imageUrl} />
-                          <IconBtn icon={Copy}   label={`Duplicar: ${ev.title}`}          color={C.green}  bgHover="rgba(102,187,106,0.1)"  onClick={() => loadIntoForm(ev, false)} />
-                          <IconBtn icon={Edit2}  label={`Editar: ${ev.title}`}            color={C.cyan}   bgHover="rgba(38,198,218,0.1)"   onClick={() => loadIntoForm(ev, true)} />
+                          <IconBtn icon={Edit2}  label={`Actualizar flyer o video: ${ev.title}`} color={C.cyan} bgHover="rgba(38,198,218,0.1)" onClick={() => loadIntoForm(ev)} />
                           <IconBtn icon={Trash2} label={`Eliminar: ${ev.title}`}          color={C.red}    bgHover="rgba(239,83,80,0.1)"    onClick={() => handleDelete(ev.id, ev.title)} />
                         </div>
                       </td>
