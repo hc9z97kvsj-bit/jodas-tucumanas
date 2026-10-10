@@ -668,7 +668,7 @@ export default function AdminPage() {
         </div>
 
         {/* ════ BUSCADOR Y ACTUALIZADOR DE MULTIMEDIA ════ */}
-        <div hidden aria-hidden="true" style={{ display: 'none', background: C.card, border: `1px solid ${C.border}`, borderRadius: 18, marginBottom: 18, overflow: 'hidden' }}>
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 18, marginBottom: 18, overflow: 'hidden' }}>
           <div style={{ padding: '16px 22px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <div style={{ width: 34, height: 34, borderRadius: 10, background: 'rgba(157,111,255,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.purple }}>
@@ -713,11 +713,11 @@ export default function AdminPage() {
                 <p role="alert" style={{ margin: '14px 0 0', color: C.red, fontSize: 12 }}>{dataError}</p>
               ) : formSearch.trim().length < 2 ? (
                 <p style={{ margin: '11px 2px 0', color: C.muted, fontSize: 11.5 }}>
-                  Escribí al menos 2 caracteres para buscar entre {events.length} fichas.
+                  Escribí al menos 2 caracteres para buscar entre {events.length} fichas. Al elegir una, sus datos se copian al formulario editable de abajo.
                 </p>
               ) : formSearchResults.length === 0 ? (
                 <div style={{ marginTop: 14, padding: 16, borderRadius: 10, background: 'rgba(255,255,255,0.025)', border: `1px solid ${C.border}`, color: C.muted2, fontSize: 12 }}>
-                  No encontramos una ficha con ese dato. Este formulario actualiza fichas existentes; no crea publicaciones nuevas.
+                  No encontramos una ficha con ese dato. Podés completar el formulario de abajo para crear una publicación nueva.
                 </div>
               ) : (
                 <div role="listbox" aria-label="Resultados de la búsqueda" style={{ display: 'flex', flexDirection: 'column', gap: 7, marginTop: 14 }}>
