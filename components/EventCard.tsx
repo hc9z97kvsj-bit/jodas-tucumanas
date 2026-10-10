@@ -178,12 +178,12 @@ function EventPartyCard({ event }: { event: EventData }) {
   const isVideo = event.mediaType === 'video' || Boolean(event.imageUrl?.toLowerCase().includes('.mp4'));
 
   return (
-    <Link href={`/eventos/${event.id}`} className="group block h-full outline-none">
+    <Link href={`/eventos/${event.id}`} className="jt-event-card group block h-full outline-none">
       <div className="relative flex flex-col h-full rounded-[24px] bg-[#0e0e0e] border border-white/5 transition-all duration-300 group-hover:-translate-y-1.5 group-hover:border-white/10 group-hover:shadow-[0_20px_56px_rgba(0,0,0,0.7)]">
         
         <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-[#8B5CF6] to-[#EC4899] opacity-0 group-hover:opacity-100 transition-opacity duration-500 z-20 rounded-t-[24px]" />
 
-        <div className="relative aspect-[4/5] w-full overflow-hidden rounded-t-[24px] bg-[#111]">
+        <div className="jt-event-card__media relative aspect-[4/5] w-full overflow-hidden rounded-t-[24px] bg-[#111]">
           <div className="absolute inset-0 z-[1] bg-gradient-to-t from-[#0e0e0e] via-[#0e0e0e]/15 to-transparent" />
           <div className="absolute inset-0 z-[2] transition-colors duration-500 group-hover:bg-black/20" />
 
@@ -203,32 +203,33 @@ function EventPartyCard({ event }: { event: EventData }) {
             <Music size={10} /> {event.musicType ?? 'Evento'}
           </div>
 
-          <button onClick={e => shareOnWhatsApp(e, event)} aria-label="Compartir" className="absolute top-3 right-3 z-10 w-8 h-8 rounded-full flex items-center justify-center bg-black/60 backdrop-blur-md border border-white/10 text-[#25D366] opacity-0 group-hover:opacity-100 transition-all duration-300 hover:scale-110 hover:bg-[#25D366]/20">
+          <button onClick={e => shareOnWhatsApp(e, event)} aria-label="Compartir" className="jt-event-card__share absolute top-3 right-3 z-10 w-8 h-8 rounded-full flex items-center justify-center bg-black/60 backdrop-blur-md border border-white/10 text-[#25D366] opacity-0 group-hover:opacity-100 transition-all duration-300 hover:scale-110 hover:bg-[#25D366]/20">
             <Share2 size={13} />
           </button>
         </div>
 
-        {/* LOGO FLOTANTE CORRECTO (SIN CORTARSE) */}
-        <div className="absolute z-30 right-4 translate-y-[-50%]" style={{ top: 'calc(100% * (5/4) / (5/4 + 1))' }}>
-          <div className="w-[52px] h-[52px] rounded-full border-[3px] border-[#0e0e0e] bg-[#1c1c1c] shadow-[0_4px_16px_rgba(0,0,0,0.6)] overflow-hidden flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-            {event.profileImageUrl ? (
-              <img src={event.profileImageUrl} alt="Logo" className="w-full h-full object-cover" />
-            ) : (
-              <UserCircle size={24} className="text-white/20" />
-            )}
+        <div className="jt-event-card__content p-5 pt-6 flex flex-col flex-grow bg-[#0e0e0e] rounded-b-[24px]">
+          <div className="jt-event-card__heading">
+            <div className="jt-event-card__title-group">
+              {event.venue && (
+                <p className="jt-event-card__venue font-black uppercase text-[10px] tracking-widest text-[#8B5CF6] mb-1.5 line-clamp-1">
+                  {event.venue}
+                </p>
+              )}
+
+              <h3 className="jt-event-card__title font-black text-white text-[18px] leading-[1.3] group-hover:text-[#A78BFA] transition-colors duration-300 line-clamp-2">
+                {event.title}
+              </h3>
+            </div>
+
+            <div className="jt-event-card__avatar">
+              {event.profileImageUrl ? (
+                <img src={event.profileImageUrl} alt={`Logo de ${event.venue || event.title}`} loading="lazy" />
+              ) : (
+                <UserCircle size={25} aria-hidden="true" />
+              )}
+            </div>
           </div>
-        </div>
-
-        <div className="p-5 pt-6 flex flex-col flex-grow bg-[#0e0e0e] rounded-b-[24px]">
-          {event.venue && (
-            <p className="font-black uppercase text-[10px] tracking-widest text-[#8B5CF6] mb-1.5 line-clamp-1">
-              {event.venue}
-            </p>
-          )}
-
-          <h3 className="font-black text-white text-[18px] leading-[1.3] mb-4 group-hover:text-[#A78BFA] transition-colors duration-300 line-clamp-2">
-            {event.title}
-          </h3>
 
           <div className="flex flex-col gap-3 flex-grow">
             <div className="flex items-center gap-3 text-white/50">
