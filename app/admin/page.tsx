@@ -340,8 +340,12 @@ export default function AdminPage() {
     const clean = (name === 'imageUrl' || name === 'profileImageUrl') ? value.replace(/\[\/?img\]/gi, '').trim() : value;
     if (name === 'imageUrl') {
       const path = clean.toLowerCase().split(/[?#]/, 1)[0];
-      const mediaType = /\.(mp4|m4v|webm|mov|ogv)$/.test(path) ? 'video' : 'image';
-      setForm(p => ({ ...p, imageUrl: clean, mediaType }));
+      const mediaType = /\.(mp4|m4v|webm|mov|ogv)$/.test(path)
+        ? 'video'
+        : /\.(jpe?g|png|gif|webp|avif)$/.test(path)
+          ? 'image'
+          : undefined;
+      setForm(p => ({ ...p, imageUrl: clean, ...(mediaType ? { mediaType } : {}) }));
       setMediaError('');
     } else {
       setForm(p => ({ ...p, [name]: clean }));
@@ -389,33 +393,67 @@ export default function AdminPage() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const toLocalDateTimeInput = (value?: string) => {
+    if (!value) return '';
+    if (!/[T ]/.test(value)) return `${value.slice(0, 10)}T00:00`;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value.slice(0, 16);
+    const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+    return local.toISOString().slice(0, 16);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingId || !events.some(event => event.id === editingId)) {
       setMediaError('Primero buscá y seleccioná una ficha de la base de datos.');
       return;
     }
-    if (!form.imageUrl.trim()) {
-      setMediaError('Pegá el enlace del flyer o video antes de guardar.');
-      return;
-    }
 
     setIsSubmitting(true);
     setMediaError('');
     try {
-      const mediaUpdate = {
-        imageUrl: form.imageUrl.trim(),
+      const eventUpdate = {
+        category: form.category === 'bar' ? 'bar' : 'evento',
+        title: form.title.trim(),
+        venue: (form.venue ?? '').trim(),
+        imageUrl: (form.imageUrl ?? '').trim(),
+        profileImageUrl: (form.profileImageUrl ?? '').trim(),
+        location: (form.location ?? '').trim(),
+        locality: form.locality ?? '',
+        location2: (form.location2 ?? '').trim(),
+        locality2: form.locality2 ?? '',
+        phone2: String(form.phone2 ?? '').trim(),
+        date: form.date ?? '',
+        schedule: form.schedule ?? DEFAULT_SCHEDULE,
+        musicType: form.musicType ?? '',
+        phone: sinNumero ? '' : String(form.phone ?? '').trim(),
+        description: form.description ?? '',
+        rating: form.rating ?? 5,
         mediaType: form.mediaType || 'image',
+        ticketLink: (form.ticketLink ?? '').trim(),
+        instagram: (form.instagram ?? '').trim(),
+        facebook: (form.facebook ?? '').trim(),
+        youtube: (form.youtube ?? '').trim(),
+        mapsLink: (form.mapsLink ?? '').trim(),
+        promotions: (form.promotions ?? []).map(promo => ({
+          id: promo.id,
+          url: String(promo.url ?? '').trim(),
+          mediaType: promo.mediaType || 'image',
+          active: Boolean(promo.active),
+        })),
+        promoUrl: form.promoUrl ?? '',
+        promoMediaType: form.promoMediaType ?? '',
+        promoActive: form.promoActive ?? false,
       };
-      await updateDoc(doc(db, 'eventos', editingId), mediaUpdate);
+      await updateDoc(doc(db, 'eventos', editingId), eventUpdate);
       setEvents(current => current.map(event =>
-        event.id === editingId ? { ...event, ...mediaUpdate } : event
+        event.id === editingId ? { ...event, ...eventUpdate } : event
       ));
-      setForm(current => ({ ...current, ...mediaUpdate }));
-      setSuccessMsg(`Flyer/video actualizado para “${events.find(event => event.id === editingId)?.title ?? 'la ficha'}”.`);
+      setForm(current => ({ ...current, ...eventUpdate }));
+      setSuccessMsg(`Ficha actualizada: “${eventUpdate.title || 'sin nombre'}”.`);
       setTimeout(() => setSuccessMsg(''), 4000);
     } catch (err) {
-      setMediaError('No se pudo actualizar el flyer o video. Revisá tu conexión e intentá otra vez.');
+      setMediaError('No se pudo guardar la ficha. Revisá tu conexión e intentá otra vez.');
       console.error(err);
     } finally {
       setIsSubmitting(false);
@@ -427,14 +465,32 @@ export default function AdminPage() {
     setForm({
       ...EMPTY_FORM,
       ...rest,
-      imageUrl: '',
+      imageUrl: ev.imageUrl ?? '',
       mediaType: ev.mediaType || 'image',
+      date: toLocalDateTimeInput(ev.date),
+      promotions: Array.isArray(ev.promotions) ? ev.promotions.map((promo, index) => ({
+        id: String(promo.id || `promotion-${index + 1}`),
+        url: String(promo.url ?? ''),
+        mediaType: promo.mediaType || 'image',
+        active: Boolean(promo.active),
+      })) : [],
+      phone: ev.phone == null ? '' : String(ev.phone),
+      schedule: Object.fromEntries(
+        Object.entries(DEFAULT_SCHEDULE).map(([day, defaults]) => [
+          day,
+          { ...defaults, ...(ev.schedule?.[day] ?? {}) },
+        ]),
+      ) as Record<string, Schedule>,
     });
     setEditingId(id);
+    setSinNumero(!ev.phone);
+    setShowLoc2(Boolean(ev.location2 || ev.locality2 || ev.phone2));
     setFormSearch('');
     setMediaError('');
     setSuccessMsg('');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.setTimeout(() => {
+      document.getElementById('eventEditor')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 0);
   };
 
   const handleDelete = async (id: string, title: string) => {
@@ -472,41 +528,19 @@ export default function AdminPage() {
   };
 
   const fmtDate = (d: string) => {
-    if (!d) return '—';
+    if (!d) return '';
     try {
-      const [date] = d.split('T');
-      const [y, m, day] = date.split('-');
-      const obj = new Date(Number(y), Number(m) - 1, Number(day));
+      const hasTimezone = /[zZ]|[+-]\d{2}:?\d{2}$/.test(d);
+      const datePart = d.split(/[T ]/)[0];
+      const [y, m, day] = datePart.split('-');
+      const obj = hasTimezone
+        ? new Date(d)
+        : new Date(Number(y), Number(m) - 1, Number(day));
+      if (Number.isNaN(obj.getTime())) return d;
       const dias = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
-      return `${dias[obj.getDay()]} ${day}/${m}`;
+      return `${dias[obj.getDay()]} ${String(obj.getDate()).padStart(2, '0')}/${String(obj.getMonth() + 1).padStart(2, '0')}`;
     } catch { return d; }
   };
-
-  const fmtDateTime = (d: string) => {
-    if (!d) return '—';
-    const date = new Date(d);
-    if (Number.isNaN(date.getTime())) return fmtDate(d);
-    return new Intl.DateTimeFormat('es-AR', {
-      day: '2-digit', month: 'short', year: 'numeric',
-      hour: '2-digit', minute: '2-digit',
-    }).format(date);
-  };
-
-  const selectedFacts = selectedRecord ? [
-    { label: 'Nombre de fiesta', value: selectedRecord.title },
-    { label: 'Lugar / boliche', value: selectedRecord.venue ?? '' },
-    { label: 'Fecha', value: selectedRecord.category === 'bar' ? 'Horarios semanales' : fmtDateTime(selectedRecord.date ?? '') },
-    { label: 'Dirección', value: [selectedRecord.location, selectedRecord.locality].filter(Boolean).join(' · ') },
-    { label: 'Género / tipo', value: selectedRecord.musicType ?? '' },
-    { label: 'WhatsApp', value: selectedRecord.phone ?? '' },
-    { label: 'WhatsApp sucursal 2', value: selectedRecord.phone2 ?? '' },
-    { label: 'Instagram', value: selectedRecord.instagram ?? '' },
-    { label: 'Facebook', value: selectedRecord.facebook ?? '' },
-    { label: 'YouTube', value: selectedRecord.youtube ?? '' },
-    { label: 'Google Maps', value: selectedRecord.mapsLink ?? '' },
-    { label: 'Link de entradas', value: selectedRecord.ticketLink ?? '' },
-    { label: 'Segunda dirección', value: [selectedRecord.location2, selectedRecord.locality2].filter(Boolean).join(' · ') },
-  ].filter(item => item.value && item.value !== '—') : [];
 
   /* ══════════════════════════════════════════════════════
      LOADING / AUTH
@@ -630,7 +664,7 @@ export default function AdminPage() {
               </div>
               <div>
                 <div style={{ fontWeight: 800, fontSize: 14.5, color: C.text }}>Buscar ficha en la base de datos</div>
-                <div style={{ fontSize: 11, color: C.muted }}>Los datos se cargan desde Firestore; solo vas a cambiar el flyer o video.</div>
+                <div style={{ fontSize: 11, color: C.muted }}>La ficha se carga desde Firestore; podés corregir sus datos y conservar sus promociones.</div>
               </div>
             </div>
             {selectedRecord && (
@@ -711,7 +745,7 @@ export default function AdminPage() {
             </div>
           ) : (
             <div style={{ padding: 20 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14, padding: 14, borderRadius: 12, background: 'rgba(157,111,255,0.055)', border: '1px solid rgba(157,111,255,0.16)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 14, borderRadius: 12, background: 'rgba(157,111,255,0.055)', border: '1px solid rgba(157,111,255,0.16)' }}>
                 {selectedRecord.imageUrl ? (
                   <img src={selectedRecord.imageUrl} alt="" aria-hidden="true" style={{ width: 52, height: 64, borderRadius: 8, objectFit: 'cover', flexShrink: 0, background: C.surface }} />
                 ) : (
@@ -731,47 +765,16 @@ export default function AdminPage() {
                   <IconBtn icon={Eye} label="Ver flyer o video actual" color={C.cyan} bgHover="rgba(38,198,218,0.12)" onClick={() => setPreview({ url: selectedRecord.imageUrl, type: selectedRecord.mediaType ?? 'image' })} size={34} />
                 )}
               </div>
-
-              <div className="admin-media-facts" style={{ gap: 8, marginBottom: 18 }}>
-                {selectedFacts.map(fact => (
-                  <div key={fact.label} style={{ minWidth: 0, padding: '10px 12px', borderRadius: 9, background: 'rgba(255,255,255,0.022)', border: `1px solid ${C.border}` }}>
-                    <div style={{ marginBottom: 4, color: C.muted, fontSize: 9, fontWeight: 800, letterSpacing: '0.09em', textTransform: 'uppercase' }}>{fact.label}</div>
-                    <div style={{ color: C.muted2, fontSize: 11.5, lineHeight: 1.45, overflowWrap: 'anywhere' }}>{fact.value}</div>
-                  </div>
-                ))}
-                {selectedFacts.length === 0 && <div style={{ color: C.muted, fontSize: 12 }}>La ficha no tiene otros datos guardados.</div>}
-              </div>
-
-              <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingTop: 16, borderTop: `1px solid ${C.border}` }}>
-                <Field label="Link nuevo del flyer o video" id="databaseMediaUrl" required>
-                  <input id="databaseMediaUrl" name="imageUrl" type="url" required value={form.imageUrl} onChange={handleChange} placeholder="Pegá una URL directa del flyer o video…" aria-required="true" style={{ ...inp, minHeight: 44 }} />
-                </Field>
-                <span style={{ marginTop: -5, color: C.muted, fontSize: 10.5 }}>
-                  El tipo se detecta automáticamente por la extensión del enlace (por ejemplo, .mp4 para video).
-                </span>
-
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '10px 12px', borderRadius: 9, color: C.muted2, background: 'rgba(38,198,218,0.05)', border: '1px solid rgba(38,198,218,0.12)', fontSize: 11, lineHeight: 1.5 }}>
-                  <CheckCircle2 size={14} style={{ flexShrink: 0, marginTop: 1, color: C.cyan }} />
-                  Al guardar solo se actualizarán <strong style={{ color: C.text }}>el link y el tipo de multimedia</strong>. Nombre, fecha, dirección y contactos permanecen como están en la base.
-                </div>
-
-                {mediaError && <p role="alert" style={{ margin: 0, color: C.red, fontSize: 12 }}>{mediaError}</p>}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                  <button type="submit" disabled={isSubmitting || !form.imageUrl.trim()}
-                    title="Guardar nuevo flyer o video"
-                    style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 17px', borderRadius: 10, background: `linear-gradient(135deg,${C.purple},${C.pink})`, color: '#fff', fontWeight: 800, fontSize: 12.5, border: 'none', cursor: isSubmitting || !form.imageUrl.trim() ? 'not-allowed' : 'pointer', opacity: isSubmitting || !form.imageUrl.trim() ? 0.55 : 1, boxShadow: '0 4px 18px rgba(0,0,0,0.35)' }}>
-                    {isSubmitting ? <Loader2 size={15} style={{ animation: 'spin .8s linear infinite' }} /> : <Save size={15} />}
-                    {isSubmitting ? 'Guardando…' : 'Actualizar flyer / video'}
-                  </button>
-                  {successMsg && <span role="status" style={{ display: 'flex', alignItems: 'center', gap: 6, color: C.green, fontSize: 12, fontWeight: 700 }}><CheckCircle2 size={14} />{successMsg}</span>}
-                </div>
-              </form>
+              <p style={{ margin: '11px 2px 0', color: C.muted, fontSize: 11.5 }}>
+                Revisá y corregí cualquier dato en el formulario de abajo. Las promociones y enlaces se cargan con la ficha seleccionada.
+              </p>
             </div>
           )}
         </div>
 
-        {/* Formulario anterior, conservado oculto para mantener compatibilidad visual. */}
-        <div hidden aria-hidden="true" style={{ display: 'none', background: C.card, border: `1px solid ${C.border}`, borderRadius: 18, marginBottom: 18 }}>
+        {/* Formulario completo para editar la ficha seleccionada; no crea registros. */}
+        {selectedRecord && (
+        <div id="eventEditor" style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 18, marginBottom: 18 }}>
 
           {/* Form header */}
           <div style={{ padding: '16px 22px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -1033,11 +1036,14 @@ export default function AdminPage() {
                         <input id="ticketLink" name="ticketLink" type="url" value={form.ticketLink ?? ''} onChange={handleChange} placeholder="https://passline.com/..." style={inp} />
                       </Field>
                     )}
-                    <Field label={`Instagram${form.category === 'bar' ? ' *' : ''}`} id="instagram" required={form.category === 'bar'}>
-                      <input id="instagram" name="instagram" type="url" value={form.instagram ?? ''} onChange={handleChange} required={form.category === 'bar'} placeholder="https://instagram.com/..." style={inp} />
+                    <Field label="Instagram" id="instagram">
+                      <input id="instagram" name="instagram" type="url" value={form.instagram ?? ''} onChange={handleChange} placeholder="https://instagram.com/..." style={inp} />
                     </Field>
                     <Field label="Facebook" id="facebook">
                       <input id="facebook" name="facebook" type="url" value={form.facebook ?? ''} onChange={handleChange} placeholder="https://facebook.com/..." style={inp} />
+                    </Field>
+                    <Field label="YouTube" id="youtube">
+                      <input id="youtube" name="youtube" type="url" value={form.youtube ?? ''} onChange={handleChange} placeholder="https://youtube.com/..." style={inp} />
                     </Field>
                     <Field label="Google Maps" id="mapsLink">
                       <input id="mapsLink" name="mapsLink" type="url" value={form.mapsLink ?? ''} onChange={handleChange} placeholder="https://maps.google.com/..." style={inp} />
@@ -1061,18 +1067,19 @@ export default function AdminPage() {
                   <label htmlFor="descArea" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap' }}>
                     {form.category === 'bar' ? 'Promociones y extras' : 'Descripción del evento'}
                   </label>
-                  <textarea id="descArea" name="description" required rows={4} value={form.description ?? ''} onChange={handleChange} title={form.category === 'bar' ? 'Promociones y extras' : 'Descripción del evento'} aria-required="true" placeholder={form.category === 'bar' ? 'Ej: Happy Hour hasta las 21hs, 2x1 en Pintas...' : 'Descripción breve del evento, dresscode, info adicional...'} style={{ ...inp, resize: 'vertical', minHeight: 90 }} />
+                  <textarea id="descArea" name="description" rows={4} value={form.description ?? ''} onChange={handleChange} title={form.category === 'bar' ? 'Promociones y extras' : 'Descripción del evento'} placeholder={form.category === 'bar' ? 'Ej: Happy Hour hasta las 21hs, 2x1 en Pintas...' : 'Descripción breve del evento, dresscode, info adicional...'} style={{ ...inp, resize: 'vertical', minHeight: 90 }} />
                 </SectionBlock>
             </>
 
             {/* Submit bar */}
+            {mediaError && <p role="alert" style={{ margin: 0, color: C.red, fontSize: 12 }}>{mediaError}</p>}
             <div style={{ display: 'flex', alignItems: 'center', gap: 11, paddingTop: 10, borderTop: `1px solid ${C.border}` }}>
               <button type="submit" disabled={isSubmitting}
-                title={editingId ? 'Guardar cambios' : 'Publicar ahora'}
-                aria-label={isSubmitting ? 'Guardando...' : editingId ? 'Guardar cambios' : 'Publicar ahora'}
-                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '11px 22px', borderRadius: 11, background: editingId ? `linear-gradient(135deg,${C.cyan},#0288d1)` : cat.gradient, color: '#fff', fontWeight: 800, fontSize: 13.5, border: 'none', cursor: isSubmitting ? 'not-allowed' : 'pointer', opacity: isSubmitting ? 0.7 : 1, boxShadow: '0 4px 18px rgba(0,0,0,0.4)', transition: 'opacity .2s' }}>
+                title="Guardar cambios de la ficha"
+                aria-label={isSubmitting ? 'Guardando...' : 'Guardar cambios de la ficha'}
+                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '11px 22px', borderRadius: 11, background: `linear-gradient(135deg,${C.cyan},#0288d1)`, color: '#fff', fontWeight: 800, fontSize: 13.5, border: 'none', cursor: isSubmitting ? 'not-allowed' : 'pointer', opacity: isSubmitting ? 0.7 : 1, boxShadow: '0 4px 18px rgba(0,0,0,0.4)', transition: 'opacity .2s' }}>
                 {isSubmitting ? <Loader2 size={16} style={{ animation: 'spin .8s linear infinite' }} /> : <Save size={16} />}
-                {isSubmitting ? 'Guardando...' : editingId ? 'Guardar Cambios' : 'Publicar Ahora'}
+                {isSubmitting ? 'Guardando...' : 'Guardar cambios'}
               </button>
               {editingId && (
                 <button type="button" onClick={resetForm} title="Cancelar" aria-label="Cancelar edición"
@@ -1090,6 +1097,7 @@ export default function AdminPage() {
             </div>
           </form>
         </div>
+        )}
 
         {/* ════ TABLA DE PUBLICACIONES ════ */}
         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 18, overflow: 'hidden' }}>
@@ -1188,7 +1196,7 @@ export default function AdminPage() {
                       <td style={{ padding: '12px 15px' }}>
                         <div style={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
                           <IconBtn icon={Eye}    label={`Ver imagen: ${ev.title}`}        color={C.purple} bgHover="rgba(157,111,255,0.12)" onClick={() => ev.imageUrl && setPreview({ url: ev.imageUrl, type: ev.mediaType ?? 'image' })} disabled={!ev.imageUrl} />
-                          <IconBtn icon={Edit2}  label={`Actualizar flyer o video: ${ev.title}`} color={C.cyan} bgHover="rgba(38,198,218,0.1)" onClick={() => loadIntoForm(ev)} />
+                          <IconBtn icon={Edit2}  label={`Editar ficha: ${ev.title}`} color={C.cyan} bgHover="rgba(38,198,218,0.1)" onClick={() => loadIntoForm(ev)} />
                           <IconBtn icon={Trash2} label={`Eliminar: ${ev.title}`}          color={C.red}    bgHover="rgba(239,83,80,0.1)"    onClick={() => handleDelete(ev.id, ev.title)} />
                         </div>
                       </td>
