@@ -19,6 +19,8 @@ export interface EventData {
   date: string;
   schedule?: Record<string, { isOpen: boolean; open?: string; close?: string }>;
   musicType: string;
+  hasLiveShow?: boolean;
+  liveShowName?: string;
   description?: string;
   rating?: number;
   likes?: number;
@@ -220,6 +222,14 @@ function EventPartyCard({ event }: { event: EventData }) {
               <h3 className="jt-event-card__title font-black text-white text-[18px] leading-[1.3] group-hover:text-[#A78BFA] transition-colors duration-300 line-clamp-2">
                 {event.title}
               </h3>
+              {event.hasLiveShow && (
+                <div className="mt-1.5 flex min-w-0 items-center gap-1.5 text-[10px] font-medium text-white/40">
+                  <Music size={11} className="shrink-0 text-white/35" aria-hidden="true" />
+                  <span className="truncate">
+                    {event.liveShowName ? `Show en vivo · ${event.liveShowName}` : 'Show en vivo'}
+                  </span>
+                </div>
+              )}
             </div>
 
             <div className="jt-event-card__avatar">

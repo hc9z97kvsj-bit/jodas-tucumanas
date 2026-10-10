@@ -48,6 +48,8 @@ interface EventData {
   date?: string;
   schedule?: Record<string, Schedule>;
   musicType?: string;
+  hasLiveShow?: boolean;
+  liveShowName?: string;
   phone?: string;
   description?: string;
   rating?: number;
@@ -256,7 +258,7 @@ const EMPTY_FORM: Omit<EventData, 'id'> = {
   location: '', locality: 'San Miguel de Tucumán',
   location2: '', locality2: 'Yerba Buena', phone2: '',
   date: '', schedule: { ...DEFAULT_SCHEDULE },
-  musicType: 'Cuarteto', phone: '', description: '',
+  musicType: 'Cuarteto', hasLiveShow: false, liveShowName: '', phone: '', description: '',
   rating: 5, mediaType: 'image',
   ticketLink: '', instagram: '', facebook: '', youtube: '', mapsLink: '',
   promotions: [], // Empezamos con un array vacío
@@ -781,6 +783,8 @@ export default function AdminPage() {
         date: form.category === 'evento' ? form.date ?? '' : '',
         schedule: form.schedule ?? DEFAULT_SCHEDULE,
         musicType: form.musicType ?? '',
+        hasLiveShow: form.category === 'evento' && Boolean(form.hasLiveShow),
+        liveShowName: form.category === 'evento' && form.hasLiveShow ? (form.liveShowName ?? '').trim() : '',
         phone: sinNumero ? '' : String(form.phone ?? '').trim(),
         description: form.description ?? '',
         rating: form.rating ?? 5,
@@ -1296,6 +1300,51 @@ export default function AdminPage() {
                         </select>
                       </Field>
                     </FieldRow>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 12, marginTop: 14 }}>
+                      <label
+                        htmlFor="hasLiveShow"
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 10,
+                          minHeight: 52,
+                          padding: '9px 12px',
+                          borderRadius: 9,
+                          border: `1px solid ${form.hasLiveShow ? 'rgba(38,198,218,0.28)' : C.border}`,
+                          background: form.hasLiveShow ? 'rgba(38,198,218,0.06)' : 'rgba(255,255,255,0.015)',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <input
+                          id="hasLiveShow"
+                          type="checkbox"
+                          checked={Boolean(form.hasLiveShow)}
+                          onChange={event => setForm(current => ({
+                            ...current,
+                            hasLiveShow: event.target.checked,
+                            liveShowName: event.target.checked ? current.liveShowName : '',
+                          }))}
+                          style={{ width: 16, height: 16, accentColor: C.cyan, cursor: 'pointer', flexShrink: 0 }}
+                        />
+                        <span style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                          <span style={{ color: C.text, fontSize: 12, fontWeight: 700 }}>Hay show en vivo</span>
+                          <span style={{ color: C.muted, fontSize: 10.5 }}>Se indicará discretamente en la página.</span>
+                        </span>
+                      </label>
+                      {form.hasLiveShow && (
+                        <Field label="Artista / banda (opcional)" id="liveShowName">
+                          <input
+                            id="liveShowName"
+                            name="liveShowName"
+                            type="text"
+                            value={form.liveShowName ?? ''}
+                            onChange={handleChange}
+                            placeholder="Ej: El Dipy, Pelusa"
+                            style={inp}
+                          />
+                        </Field>
+                      )}
+                    </div>
                   </SectionBlock>
                 ) : (
                   <SectionBlock icon={Clock} title="Horarios Semanales" accent={C.orange}>

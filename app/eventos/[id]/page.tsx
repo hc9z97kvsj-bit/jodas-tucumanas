@@ -73,6 +73,8 @@ interface EventData {
   date?: string;
   schedule?: Record<string, ScheduleDay>;
   musicType?: string;
+  hasLiveShow?: boolean;
+  liveShowName?: string;
   description?: string;
   rating?: number;
   likes?: number;
@@ -857,6 +859,12 @@ export default function EventoDetalle() {
             {event.musicType && (
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'rgba(255,255,255,0.06)', color: MUTED, padding: '4px 11px', borderRadius: 99, fontSize: 10.5, fontWeight: 700 }}>
                 <Music size={11} /> {event.musicType}
+              </span>
+            )}
+            {event.hasLiveShow && (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.5)', padding: '4px 9px', borderRadius: 99, fontSize: 10, fontWeight: 600 }}>
+                <Music size={10} />
+                Show en vivo{event.liveShowName ? ` · ${event.liveShowName}` : ''}
               </span>
             )}
             <button onClick={handleLike} disabled={liked}

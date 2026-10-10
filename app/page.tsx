@@ -36,6 +36,8 @@ interface EventData {
   date: string;
   schedule?: Record<string, { isOpen: boolean; open?: string; close?: string }>;
   musicType: string;
+  hasLiveShow?: boolean;
+  liveShowName?: string;
   description?: string;
   rating?: number;
   likes?: number;
@@ -1126,6 +1128,14 @@ function FeaturedCard({ event, rank, index, isLiked, onLike }: {
               <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider"
                 style={{ background: `${rc.accent}12`, color: rc.accent, border: `1px solid ${rc.accent}22` }}>
                 <Music size={9} />{event.musicType}
+              </div>
+            )}
+            {event.hasLiveShow && (
+              <div className="flex items-center gap-1.5 text-[10px] font-medium text-white/40">
+                <Music size={10} className="shrink-0 text-white/35" />
+                <span className="line-clamp-1">
+                  Show en vivo{event.liveShowName ? ` · ${event.liveShowName}` : ''}
+                </span>
               </div>
             )}
           </div>
