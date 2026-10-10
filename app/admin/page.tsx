@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy } from 'firebase/firestore';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { db, auth } from '@/lib/firebase';
@@ -11,7 +11,8 @@ import {
   Plus, Save, Edit2, Trash2, LogOut, Search, RefreshCw,
   Inbox, Beer, PartyPopper, Clock, Eye, X, MapPin,
   LayoutGrid, Music, CalendarDays, Image, Link2, Phone,
-  CheckCircle2, Loader2, Wand2, AlertCircle, Layers, BookOpen, FileText, BarChart3, Hash
+  CheckCircle2, Loader2, Wand2, AlertCircle, Layers, BookOpen, FileText, BarChart3, Hash,
+  ChevronDown, Check
 } from 'lucide-react';
 
 /* ══════════════════════════════════════════════════════
@@ -353,6 +354,210 @@ function Field({ label, id, required, children }: { label: string; id: string; r
         {label} {required && <span style={{ color: C.pink, fontSize: 11 }}>*</span>}
       </label>
       {children}
+    </div>
+  );
+}
+
+function LocalityCombobox({ id, value, onChange, label }: { id: string; value: string; onChange: (value: string) => void; label: string }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchText, setSearchText] = useState('');
+  const [activeIndex, setActiveIndex] = useState(0);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const listboxId = `${id}-listbox`;
+
+  const filteredLocalities = useMemo(() => {
+    const normalizedSearch = searchText
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLocaleLowerCase('es-AR')
+      .trim();
+
+    if (!normalizedSearch) return LOCALIDADES;
+
+    return LOCALIDADES.filter(locality =>
+      locality
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLocaleLowerCase('es-AR')
+        .includes(normalizedSearch)
+    );
+  }, [searchText]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    searchRef.current?.focus();
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (rootRef.current && !rootRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+        setSearchText('');
+        setActiveIndex(0);
+      }
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    return () => document.removeEventListener('pointerdown', handlePointerDown);
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || filteredLocalities.length === 0) return;
+    document.getElementById(`${id}-option-${activeIndex}`)?.scrollIntoView({ block: 'nearest' });
+  }, [activeIndex, filteredLocalities.length, id, isOpen]);
+
+  const openList = () => {
+    setSearchText('');
+    setActiveIndex(0);
+    setIsOpen(true);
+  };
+
+  const chooseLocality = (locality: string) => {
+    onChange(locality);
+    setIsOpen(false);
+    setSearchText('');
+    setActiveIndex(0);
+  };
+
+  const handleSearchKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      if (!isOpen) {
+        openList();
+      } else if (filteredLocalities.length > 0) {
+        setActiveIndex(index => Math.min(index + 1, filteredLocalities.length - 1));
+      }
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      if (!isOpen) {
+        openList();
+      } else if (filteredLocalities.length > 0) {
+        setActiveIndex(index => Math.max(index - 1, 0));
+      }
+    } else if (event.key === 'Enter' && isOpen) {
+      event.preventDefault();
+      const selected = filteredLocalities[activeIndex];
+      if (selected) chooseLocality(selected);
+    } else if (event.key === 'Escape' && isOpen) {
+      event.preventDefault();
+      setIsOpen(false);
+      setSearchText('');
+      setActiveIndex(0);
+    }
+  };
+
+  return (
+    <div ref={rootRef} style={{ position: 'relative', width: '100%' }}>
+      <button
+        id={id}
+        type="button"
+        aria-label={`${label}: ${value || 'sin seleccionar'}`}
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+        aria-controls={listboxId}
+        onClick={() => isOpen ? setIsOpen(false) : openList()}
+        style={{
+          ...inp,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 10,
+          minHeight: 38,
+          textAlign: 'left',
+          cursor: 'pointer',
+        }}
+      >
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: value ? C.text : C.muted }}>
+          {value || 'Seleccionar localidad'}
+        </span>
+        <ChevronDown size={15} aria-hidden="true" style={{ color: C.muted2, flexShrink: 0, transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
+      </button>
+
+      {isOpen && (
+        <div
+          style={{
+            position: 'relative',
+            marginTop: 6,
+            zIndex: 50,
+            padding: 8,
+            boxSizing: 'border-box',
+            border: `1px solid ${C.border2}`,
+            borderRadius: 11,
+            background: C.card,
+            boxShadow: '0 14px 34px rgba(0,0,0,0.55)',
+          }}
+        >
+          <div style={{ position: 'relative', marginBottom: 7 }}>
+            <Search size={14} aria-hidden="true" style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: C.muted, pointerEvents: 'none' }} />
+            <input
+              ref={searchRef}
+              type="search"
+              role="combobox"
+              aria-label={`Buscar ${label.toLocaleLowerCase('es-AR')}`}
+              aria-autocomplete="list"
+              aria-expanded="true"
+              aria-controls={listboxId}
+              aria-activedescendant={filteredLocalities.length ? `${id}-option-${activeIndex}` : undefined}
+              autoComplete="off"
+              placeholder="Buscar localidad..."
+              value={searchText}
+              onChange={event => {
+                setSearchText(event.target.value);
+                setActiveIndex(0);
+              }}
+              onKeyDown={handleSearchKeyDown}
+              style={{ ...inp, padding: '9px 11px 9px 34px', fontSize: 12 }}
+            />
+          </div>
+
+          <div
+            id={listboxId}
+            role="listbox"
+            aria-label={`Resultados de ${label.toLocaleLowerCase('es-AR')}`}
+            style={{ maxHeight: 230, overflowY: 'auto', overscrollBehavior: 'contain' }}
+          >
+            {filteredLocalities.length > 0 ? filteredLocalities.map((locality, index) => {
+              const active = index === activeIndex;
+              const selected = locality === value;
+
+              return (
+                <div
+                  key={locality}
+                  id={`${id}-option-${index}`}
+                  role="option"
+                  aria-selected={selected}
+                  onMouseMove={() => setActiveIndex(index)}
+                  onMouseDown={event => event.preventDefault()}
+                  onClick={() => chooseLocality(locality)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 8,
+                    padding: '9px 10px',
+                    borderRadius: 7,
+                    background: active ? 'rgba(157,111,255,0.14)' : 'transparent',
+                    color: active ? C.text : C.muted2,
+                    fontSize: 12.5,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <span>{locality}</span>
+                  {selected && <Check size={14} aria-hidden="true" style={{ color: C.cyan, flexShrink: 0 }} />}
+                </div>
+              );
+            }) : (
+              <div style={{ padding: '13px 10px', color: C.muted, fontSize: 12, textAlign: 'center' }}>
+                No hay localidades que coincidan.
+              </div>
+            )}
+          </div>
+
+          <div style={{ padding: '7px 8px 2px', color: C.muted, fontSize: 10.5 }}>
+            {filteredLocalities.length} {filteredLocalities.length === 1 ? 'resultado' : 'resultados'}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1025,9 +1230,12 @@ export default function AdminPage() {
                 <SectionBlock icon={MapPin} title="Ubicación Principal" accent={C.cyan}>
                   <FieldRow>
                     <Field label="Localidad / Zona" id="locality">
-                      <select id="locality" name="locality" value={form.locality} onChange={handleChange} title="Localidad" aria-label="Localidad o zona" style={{ ...inp, colorScheme: 'dark' }}>
-                        {LOCALIDADES.map(l => <option key={l} value={l}>{l}</option>)}
-                      </select>
+                      <LocalityCombobox
+                        id="locality"
+                        label="Localidad o zona"
+                        value={form.locality ?? ''}
+                        onChange={locality => setForm(current => ({ ...current, locality }))}
+                      />
                     </Field>
                     <Field label="Dirección exacta" id="location" required>
                       <input id="location" name="location" required type="text" value={form.location ?? ''} onChange={handleChange} placeholder="Ej: 24 de Septiembre 1326" aria-required="true" style={inp} />
@@ -1054,9 +1262,12 @@ export default function AdminPage() {
                       <div style={{ padding: '0 15px 15px' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 13 }}>
                           <Field label="Localidad 2" id="locality2">
-                            <select id="locality2" name="locality2" value={form.locality2} onChange={handleChange} title="Segunda localidad" aria-label="Segunda localidad" style={{ ...inp, colorScheme: 'dark' }}>
-                              {LOCALIDADES.map(l => <option key={l} value={l}>{l}</option>)}
-                            </select>
+                            <LocalityCombobox
+                              id="locality2"
+                              label="Segunda localidad"
+                              value={form.locality2 ?? ''}
+                              onChange={locality => setForm(current => ({ ...current, locality2: locality }))}
+                            />
                           </Field>
                           <Field label="Dirección 2" id="location2">
                             <input id="location2" name="location2" type="text" value={form.location2 ?? ''} onChange={handleChange} placeholder="Ej: Av. Perón 1500" style={inp} />
