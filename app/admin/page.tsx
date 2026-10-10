@@ -404,6 +404,8 @@ export default function AdminPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const submitter = (e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
+    const publishAsNew = Boolean(editingId) && submitter?.value === 'publish';
     setIsSubmitting(true);
     setMediaError('');
     try {
@@ -440,7 +442,7 @@ export default function AdminPage() {
         locality2: showLoc2 ? form.locality2 ?? '' : '',
         phone2: showLoc2 ? String(form.phone2 ?? '').trim() : '',
       };
-      if (editingId) {
+      if (editingId && !publishAsNew) {
         await updateDoc(doc(db, 'eventos', editingId), eventUpdate);
         setSuccessMsg('Ficha actualizada correctamente.');
       } else {
@@ -448,7 +450,9 @@ export default function AdminPage() {
           ...eventUpdate,
           createdAt: new Date().toISOString(),
         });
-        setSuccessMsg('Publicación guardada correctamente.');
+        setSuccessMsg(publishAsNew
+          ? 'Nueva publicación creada; la ficha original quedó intacta.'
+          : 'Publicación creada correctamente.');
       }
 
       setForm(EMPTY_FORM);
@@ -1085,13 +1089,21 @@ export default function AdminPage() {
             {/* Submit bar */}
             {mediaError && <p role="alert" style={{ margin: 0, color: C.red, fontSize: 12 }}>{mediaError}</p>}
             <div style={{ display: 'flex', alignItems: 'center', gap: 11, paddingTop: 10, borderTop: `1px solid ${C.border}` }}>
-              <button type="submit" disabled={isSubmitting}
+              <button type="submit" value={editingId ? 'save' : 'publish'} disabled={isSubmitting}
                 title={editingId ? 'Guardar cambios' : 'Publicar ahora'}
                 aria-label={isSubmitting ? 'Guardando...' : editingId ? 'Guardar cambios' : 'Publicar ahora'}
                 style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '11px 22px', borderRadius: 11, background: editingId ? `linear-gradient(135deg,${C.cyan},#0288d1)` : cat.gradient, color: '#fff', fontWeight: 800, fontSize: 13.5, border: 'none', cursor: isSubmitting ? 'not-allowed' : 'pointer', opacity: isSubmitting ? 0.7 : 1, boxShadow: '0 4px 18px rgba(0,0,0,0.4)', transition: 'opacity .2s' }}>
                 {isSubmitting ? <Loader2 size={16} style={{ animation: 'spin .8s linear infinite' }} /> : <Save size={16} />}
                 {isSubmitting ? 'Guardando...' : editingId ? 'Guardar cambios' : 'Publicar ahora'}
               </button>
+              {editingId && (
+                <button type="submit" value="publish" disabled={isSubmitting}
+                  title="Crear una nueva publicación con estos datos sin modificar la ficha original"
+                  aria-label="Publicar como nueva ficha"
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '11px 18px', borderRadius: 11, background: cat.gradient, color: '#fff', fontWeight: 800, fontSize: 13.5, border: 'none', cursor: isSubmitting ? 'not-allowed' : 'pointer', opacity: isSubmitting ? 0.7 : 1, boxShadow: '0 4px 18px rgba(0,0,0,0.35)' }}>
+                  <PartyPopper size={16} /> Publicar
+                </button>
+              )}
               {editingId && (
                 <button type="button" onClick={resetForm} title="Cancelar" aria-label="Cancelar edición"
                   style={{ padding: '11px 18px', borderRadius: 11, background: 'transparent', border: `1px solid ${C.border}`, color: C.muted, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
