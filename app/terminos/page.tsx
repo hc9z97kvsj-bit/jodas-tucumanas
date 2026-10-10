@@ -237,13 +237,14 @@ export default function TerminosYCondiciones() {
             </span>
             <div>
               <h2 className="text-sm font-extrabold text-white sm:text-base">
-                Aviso importante
+                Términos vigentes
               </h2>
               <p className="mt-2 text-sm leading-6 text-[#c7c0ae]">
-                Estos términos son información general y no constituyen
-                asesoramiento legal. Antes de publicarlos como versión
-                definitiva, es recomendable que los revise un profesional
-                habilitado en la jurisdicción correspondiente.
+                Estas son las condiciones vigentes para el uso de Jodas
+                Tucumanas. El texto es informativo y no constituye
+                asesoramiento legal; no limita derechos irrenunciables ni
+                responsabilidades que la normativa aplicable no permita
+                excluir.
               </p>
             </div>
           </div>
