@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { collection, getDocs, doc, updateDoc, deleteDoc, query, orderBy } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy } from 'firebase/firestore';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { db, auth } from '@/lib/firebase';
 import { useRouter } from 'next/navigation';
@@ -404,11 +404,6 @@ export default function AdminPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingId || !events.some(event => event.id === editingId)) {
-      setMediaError('Primero buscá y seleccioná una ficha de la base de datos.');
-      return;
-    }
-
     setIsSubmitting(true);
     setMediaError('');
     try {
@@ -420,10 +415,7 @@ export default function AdminPage() {
         profileImageUrl: (form.profileImageUrl ?? '').trim(),
         location: (form.location ?? '').trim(),
         locality: form.locality ?? '',
-        location2: (form.location2 ?? '').trim(),
-        locality2: form.locality2 ?? '',
-        phone2: String(form.phone2 ?? '').trim(),
-        date: form.date ?? '',
+        date: form.category === 'evento' ? form.date ?? '' : '',
         schedule: form.schedule ?? DEFAULT_SCHEDULE,
         musicType: form.musicType ?? '',
         phone: sinNumero ? '' : String(form.phone ?? '').trim(),
@@ -444,16 +436,30 @@ export default function AdminPage() {
         promoUrl: form.promoUrl ?? '',
         promoMediaType: form.promoMediaType ?? '',
         promoActive: form.promoActive ?? false,
+        location2: showLoc2 ? String(form.location2 ?? '').trim() : '',
+        locality2: showLoc2 ? form.locality2 ?? '' : '',
+        phone2: showLoc2 ? String(form.phone2 ?? '').trim() : '',
       };
-      await updateDoc(doc(db, 'eventos', editingId), eventUpdate);
-      setEvents(current => current.map(event =>
-        event.id === editingId ? { ...event, ...eventUpdate } : event
-      ));
-      setForm(current => ({ ...current, ...eventUpdate }));
-      setSuccessMsg(`Ficha actualizada: “${eventUpdate.title || 'sin nombre'}”.`);
+      if (editingId) {
+        await updateDoc(doc(db, 'eventos', editingId), eventUpdate);
+        setSuccessMsg('Ficha actualizada correctamente.');
+      } else {
+        await addDoc(collection(db, 'eventos'), {
+          ...eventUpdate,
+          createdAt: new Date().toISOString(),
+        });
+        setSuccessMsg('Publicación guardada correctamente.');
+      }
+
+      setForm(EMPTY_FORM);
+      setEditingId(null);
+      setSinNumero(false);
+      setShowLoc2(false);
+      setFormSearch('');
+      await fetchEvents();
       setTimeout(() => setSuccessMsg(''), 4000);
     } catch (err) {
-      setMediaError('No se pudo guardar la ficha. Revisá tu conexión e intentá otra vez.');
+      setMediaError('No se pudo guardar. Revisá tu conexión e intentá otra vez.');
       console.error(err);
     } finally {
       setIsSubmitting(false);
@@ -462,6 +468,14 @@ export default function AdminPage() {
 
   const loadIntoForm = (ev: EventData) => {
     const { id, ...rest } = ev;
+    const legacyPromotions = !ev.promotions && ev.promoUrl
+      ? [{
+          id: `legacy-${Date.now()}`,
+          url: ev.promoUrl,
+          mediaType: ev.promoMediaType || 'image',
+          active: ev.promoActive !== false,
+        }]
+      : [];
     setForm({
       ...EMPTY_FORM,
       ...rest,
@@ -473,7 +487,7 @@ export default function AdminPage() {
         url: String(promo.url ?? ''),
         mediaType: promo.mediaType || 'image',
         active: Boolean(promo.active),
-      })) : [],
+      })) : legacyPromotions,
       phone: ev.phone == null ? '' : String(ev.phone),
       schedule: Object.fromEntries(
         Object.entries(DEFAULT_SCHEDULE).map(([day, defaults]) => [
@@ -488,9 +502,7 @@ export default function AdminPage() {
     setFormSearch('');
     setMediaError('');
     setSuccessMsg('');
-    window.setTimeout(() => {
-      document.getElementById('eventEditor')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 0);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleDelete = async (id: string, title: string) => {
@@ -656,7 +668,7 @@ export default function AdminPage() {
         </div>
 
         {/* ════ BUSCADOR Y ACTUALIZADOR DE MULTIMEDIA ════ */}
-        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 18, marginBottom: 18, overflow: 'hidden' }}>
+        <div hidden aria-hidden="true" style={{ display: 'none', background: C.card, border: `1px solid ${C.border}`, borderRadius: 18, marginBottom: 18, overflow: 'hidden' }}>
           <div style={{ padding: '16px 22px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <div style={{ width: 34, height: 34, borderRadius: 10, background: 'rgba(157,111,255,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.purple }}>
@@ -772,8 +784,7 @@ export default function AdminPage() {
           )}
         </div>
 
-        {/* Formulario completo para editar la ficha seleccionada; no crea registros. */}
-        {selectedRecord && (
+        {/* Formulario original de publicación y edición, con sus promociones. */}
         <div id="eventEditor" style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 18, marginBottom: 18 }}>
 
           {/* Form header */}
@@ -1075,11 +1086,11 @@ export default function AdminPage() {
             {mediaError && <p role="alert" style={{ margin: 0, color: C.red, fontSize: 12 }}>{mediaError}</p>}
             <div style={{ display: 'flex', alignItems: 'center', gap: 11, paddingTop: 10, borderTop: `1px solid ${C.border}` }}>
               <button type="submit" disabled={isSubmitting}
-                title="Guardar cambios de la ficha"
-                aria-label={isSubmitting ? 'Guardando...' : 'Guardar cambios de la ficha'}
-                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '11px 22px', borderRadius: 11, background: `linear-gradient(135deg,${C.cyan},#0288d1)`, color: '#fff', fontWeight: 800, fontSize: 13.5, border: 'none', cursor: isSubmitting ? 'not-allowed' : 'pointer', opacity: isSubmitting ? 0.7 : 1, boxShadow: '0 4px 18px rgba(0,0,0,0.4)', transition: 'opacity .2s' }}>
+                title={editingId ? 'Guardar cambios' : 'Publicar ahora'}
+                aria-label={isSubmitting ? 'Guardando...' : editingId ? 'Guardar cambios' : 'Publicar ahora'}
+                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '11px 22px', borderRadius: 11, background: editingId ? `linear-gradient(135deg,${C.cyan},#0288d1)` : cat.gradient, color: '#fff', fontWeight: 800, fontSize: 13.5, border: 'none', cursor: isSubmitting ? 'not-allowed' : 'pointer', opacity: isSubmitting ? 0.7 : 1, boxShadow: '0 4px 18px rgba(0,0,0,0.4)', transition: 'opacity .2s' }}>
                 {isSubmitting ? <Loader2 size={16} style={{ animation: 'spin .8s linear infinite' }} /> : <Save size={16} />}
-                {isSubmitting ? 'Guardando...' : 'Guardar cambios'}
+                {isSubmitting ? 'Guardando...' : editingId ? 'Guardar cambios' : 'Publicar ahora'}
               </button>
               {editingId && (
                 <button type="button" onClick={resetForm} title="Cancelar" aria-label="Cancelar edición"
@@ -1097,7 +1108,6 @@ export default function AdminPage() {
             </div>
           </form>
         </div>
-        )}
 
         {/* ════ TABLA DE PUBLICACIONES ════ */}
         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 18, overflow: 'hidden' }}>
